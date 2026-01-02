@@ -13,14 +13,14 @@
     "windows": [
       {
         "title": "BallCam Agent",
-        "width": 400,
-        "height": 600,
+        "width": 480,
+        "height": 720,
         "resizable": true,
         "center": true,
         "decorations": true,
         "visible": true,
-        "minWidth": 350,
-        "minHeight": 500
+        "minWidth": 400,
+        "minHeight": 600
       }
     ],
     "trayIcon": {
