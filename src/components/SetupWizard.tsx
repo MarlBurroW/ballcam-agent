@@ -4,6 +4,7 @@ import { LoginForm } from './LoginForm';
 import { FolderDetection } from './FolderDetection';
 import { GradientButton } from './ui/gradient-button';
 import { AuthCard } from './ui/gradient-card';
+import { Logo } from './ui/Logo';
 import * as api from '@/lib/api';
 import type { User } from '@/lib/types';
 import { CheckCircle2 } from 'lucide-react';
@@ -50,6 +51,11 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="flex justify-center mb-6">
+          <Logo size="md" />
+        </div>
+
         {/* Progress indicator */}
         <div className="flex justify-center mb-8">
           <div className="flex items-center gap-2">
