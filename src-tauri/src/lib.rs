@@ -54,7 +54,8 @@ pub fn run() {
                 let menu = Menu::with_items(app, &[&pause, &sep1, &settings, &history, &sep2, &quit])?;
 
                 TrayIconBuilder::with_id("main")
-                    .tooltip("BallCam Agent - Watching")
+                    .icon(app.default_window_icon().unwrap().clone())
+                    .tooltip("BallCam Agent")
                     .menu(&menu)
                     .show_menu_on_left_click(false)
                     .on_menu_event(|app, event| {
@@ -145,6 +146,13 @@ pub fn run() {
             commands::detect_replay_folder,
             commands::detect_all_replay_folders,
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Hide window instead of closing
+                let _ = window.hide();
+                api.prevent_close();
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
