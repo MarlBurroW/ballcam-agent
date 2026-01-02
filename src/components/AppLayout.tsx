@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { Eye, History, Settings, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Logo } from '@/components/ui/Logo';
 
 type Tab = 'home' | 'history' | 'settings';
 
@@ -38,6 +39,13 @@ function NavButton({ icon, label, active, onClick }: NavButtonProps) {
 export function AppLayout({ children, currentTab, onTabChange, onLogout }: AppLayoutProps) {
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col">
+      {/* Header */}
+      <header className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm px-4 py-3">
+        <div className="flex items-center justify-center">
+          <Logo size="sm" />
+        </div>
+      </header>
+
       {/* Main content */}
       <div className="flex-1 overflow-y-auto">
         {children}
