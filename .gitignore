@@ -43,6 +43,7 @@ coverage/
 .specify/
 specs/
 *.code-workspace
+CLAUDE.md
 
 # Documentation (dev only)
 ballcam-api-doc.md
