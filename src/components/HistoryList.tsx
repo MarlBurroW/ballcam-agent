@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Loader2, FolderOpen } from 'lucide-react';
+import { Loader2, FolderOpen, ChevronDown } from 'lucide-react';
 import { HistoryItem } from '@/components/HistoryItem';
 import type { UploadRecord } from '@/lib/types';
 import * as api from '@/lib/api';
 
+const PAGE_SIZE = 50;
+
 export function HistoryList() {
-  const [records, setRecords] = useState<UploadRecord[]>([]);
+  const [allRecords, setAllRecords] = useState<UploadRecord[]>([]);
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,7 +19,11 @@ export function HistoryList() {
   const loadHistory = async () => {
     try {
       const history = await api.getHistory();
-      setRecords(history);
+      // Sort by most recent first
+      const sorted = history.sort((a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setAllRecords(sorted);
     } catch (err) {
       setError('Failed to load history');
       console.error(err);
@@ -24,6 +31,13 @@ export function HistoryList() {
       setLoading(false);
     }
   };
+
+  const loadMore = () => {
+    setDisplayCount(prev => prev + PAGE_SIZE);
+  };
+
+  const records = allRecords.slice(0, displayCount);
+  const hasMore = displayCount < allRecords.length;
 
   if (loading) {
     return (
@@ -57,9 +71,25 @@ export function HistoryList() {
 
   return (
     <div className="space-y-3">
+      {/* Record count */}
+      <div className="text-xs text-gray-500 text-center">
+        Showing {records.length} of {allRecords.length} replays
+      </div>
+
       {records.map((record) => (
         <HistoryItem key={record.id} record={record} />
       ))}
+
+      {/* Load more button */}
+      {hasMore && (
+        <button
+          onClick={loadMore}
+          className="w-full py-3 flex items-center justify-center gap-2 bg-gray-800/50 hover:bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-400 hover:text-gray-300 transition-colors"
+        >
+          <ChevronDown className="w-4 h-4" />
+          Load more ({allRecords.length - displayCount} remaining)
+        </button>
+      )}
     </div>
   );
 }
