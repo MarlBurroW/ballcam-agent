@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   AppConfig,
   AuthSession,
+  DetectedFolder,
   DeviceCodeResponse,
   DevicePollResult,
   UploadRecord,
@@ -82,6 +83,10 @@ export async function showWindow(): Promise<void> {
 // Folder detection
 export async function detectReplayFolder(): Promise<string> {
   return invoke('detect_replay_folder');
+}
+
+export async function detectAllReplayFolders(): Promise<DetectedFolder[]> {
+  return invoke('detect_all_replay_folders');
 }
 
 // Open URL in default browser

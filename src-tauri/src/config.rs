@@ -42,6 +42,45 @@ pub fn detect_replay_folder() -> Result<String, String> {
         .ok_or_else(|| "Rocket League replay folder not found".to_string())
 }
 
+/// Detected replay folder with platform info
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DetectedFolder {
+    pub path: String,
+    pub platform: String, // "steam" or "epic"
+}
+
+/// Detect all available replay folders
+pub fn detect_all_replay_folders() -> Vec<DetectedFolder> {
+    let mut folders = Vec::new();
+
+    if let Some(docs) = dirs::document_dir() {
+        let base_path = docs
+            .join("My Games")
+            .join("Rocket League")
+            .join("TAGame");
+
+        // Check Steam location (Demos)
+        let steam_path = base_path.join("Demos");
+        if steam_path.exists() {
+            folders.push(DetectedFolder {
+                path: steam_path.to_string_lossy().to_string(),
+                platform: "steam".to_string(),
+            });
+        }
+
+        // Check Epic Games location (DemosEpic)
+        let epic_path = base_path.join("DemosEpic");
+        if epic_path.exists() {
+            folders.push(DetectedFolder {
+                path: epic_path.to_string_lossy().to_string(),
+                platform: "epic".to_string(),
+            });
+        }
+    }
+
+    folders
+}
+
 /// Load app configuration from store
 pub fn load_config(app: &AppHandle) -> Result<AppConfig, String> {
     let store = app

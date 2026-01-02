@@ -427,3 +427,9 @@ pub fn get_history(app: AppHandle) -> Result<Vec<UploadRecord>, String> {
 pub fn detect_replay_folder() -> Result<String, String> {
     config::detect_replay_folder()
 }
+
+/// Detect all available Rocket League replay folders
+#[tauri::command]
+pub fn detect_all_replay_folders() -> Vec<config::DetectedFolder> {
+    config::detect_all_replay_folders()
+}

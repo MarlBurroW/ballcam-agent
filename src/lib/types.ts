@@ -83,3 +83,9 @@ export interface WatcherState {
   lastEventAt?: string;
   pendingFiles: string[];
 }
+
+// Detected replay folder with platform info
+export interface DetectedFolder {
+  path: string;
+  platform: 'steam' | 'epic';
+}

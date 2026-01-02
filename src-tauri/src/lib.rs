@@ -143,6 +143,7 @@ pub fn run() {
             commands::get_history,
             // Folder detection
             commands::detect_replay_folder,
+            commands::detect_all_replay_folders,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
