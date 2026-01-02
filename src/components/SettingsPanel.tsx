@@ -1,16 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Loader2, Globe, Lock, FolderOpen, Bell, Power } from 'lucide-react';
+import { Loader2, Globe, Lock, FolderOpen, Bell, Power, Info, Download } from 'lucide-react';
+import { getVersion } from '@tauri-apps/api/app';
 import type { AppConfig, Visibility } from '@/lib/types';
 import * as api from '@/lib/api';
+import { useUpdater } from '@/hooks/useUpdater';
 
 export function SettingsPanel() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState<string>('');
+  const { updateAvailable, isChecking, isDownloading, downloadProgress, checkForUpdates, downloadAndInstall } = useUpdater();
 
   useEffect(() => {
     loadConfig();
+    getVersion().then(setVersion);
   }, []);
 
   const loadConfig = async () => {
@@ -170,6 +175,52 @@ export function SettingsPanel() {
         </div>
         <div className="p-3 bg-gray-800/50 rounded-lg text-xs font-mono text-gray-400 break-all">
           {config.replayFolder || 'Not configured'}
+        </div>
+      </div>
+
+      {/* About / Version */}
+      <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-violet-500/20 rounded-lg flex items-center justify-center">
+              <Info className="w-4 h-4 text-violet-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-white">BallCam Agent</h3>
+              <p className="text-xs text-gray-500">Version {version}</p>
+            </div>
+          </div>
+          {updateAvailable ? (
+            <button
+              onClick={downloadAndInstall}
+              disabled={isDownloading}
+              className="flex items-center gap-2 px-3 py-1.5 bg-violet-500 hover:bg-violet-600 disabled:bg-violet-500/50 text-white text-xs font-medium rounded-lg transition-colors"
+            >
+              {isDownloading ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  {downloadProgress}%
+                </>
+              ) : (
+                <>
+                  <Download className="w-3 h-3" />
+                  Update to {updateAvailable.version}
+                </>
+              )}
+            </button>
+          ) : (
+            <button
+              onClick={checkForUpdates}
+              disabled={isChecking}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-700/50 text-gray-300 text-xs font-medium rounded-lg transition-colors"
+            >
+              {isChecking ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                'Check for updates'
+              )}
+            </button>
+          )}
         </div>
       </div>
 
