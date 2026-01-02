@@ -38,6 +38,9 @@ coverage/
 *.tmp
 *.bak
 
+# Tauri signing keys (NEVER COMMIT)
+.tauri-keys/
+
 # AI/Agent tools
 .claude/
 .specify/

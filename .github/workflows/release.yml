@@ -44,12 +44,16 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'BallCam Agent ${{ github.ref_name }}'
           releaseBody: |
             Download the installer for your platform:
             - **Windows**: `.msi` or `.exe` (NSIS installer)
+
+            The app will auto-update when new versions are available.
           releaseDraft: false
           prerelease: false
+          updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
