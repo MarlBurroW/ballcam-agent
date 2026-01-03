@@ -36,33 +36,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Setup signing key
+      - name: Decode signing key
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY_BASE64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
-          # Decode base64 key and write to file
-          echo "$TAURI_SIGNING_PRIVATE_KEY_BASE64" | base64 -d > "$RUNNER_TEMP/signing-key.key"
-          echo "Signing key written to $RUNNER_TEMP/signing-key.key"
-          echo "Key file size: $(wc -c < "$RUNNER_TEMP/signing-key.key") bytes"
+          # Decode base64 key and save to GITHUB_ENV
+          DECODED_KEY=$(echo "$TAURI_SIGNING_PRIVATE_KEY_BASE64" | base64 -d)
+          echo "Signing key decoded (${#DECODED_KEY} chars)"
 
-      - name: Build Tauri app
-        shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ runner.temp }}/signing-key.key
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
-        run: |
-          npm run tauri build -- --verbose
+          # Use delimiter to handle multi-line value
+          echo "TAURI_PRIVATE_KEY<<EOF" >> $GITHUB_ENV
+          echo "$DECODED_KEY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
-          echo "=== Listing bundle directory ==="
-          ls -la src-tauri/target/release/bundle/nsis/ || true
-          ls -la src-tauri/target/release/bundle/msi/ || true
-
-      - name: Create Release and Upload
+      - name: Build and Release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ runner.temp }}/signing-key.key
+          TAURI_SIGNING_PRIVATE_KEY: ${{ env.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           tagName: ${{ github.ref_name }}
@@ -76,4 +68,3 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
-          tauriScript: echo "skip"
