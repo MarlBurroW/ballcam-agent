@@ -16,19 +16,24 @@ export function useUpdater() {
   const [error, setError] = useState<string | null>(null);
 
   const checkForUpdates = async () => {
+    console.log('[Updater] Checking for updates...');
     setIsChecking(true);
     setError(null);
     try {
       const update = await check();
+      console.log('[Updater] Check result:', update);
       if (update) {
+        console.log('[Updater] Update available:', update.version);
         setUpdateAvailable({
           version: update.version,
           date: update.date,
           body: update.body,
         });
+      } else {
+        console.log('[Updater] No update available (already on latest)');
       }
     } catch (err) {
-      console.error('Failed to check for updates:', err);
+      console.error('[Updater] Failed to check for updates:', err);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsChecking(false);
