@@ -1,6 +1,4 @@
-import { ExternalLink } from 'lucide-react';
 import type { User } from '@/lib/types';
-import * as api from '@/lib/api';
 
 interface UserCardProps {
   user: User | null;
@@ -21,11 +19,6 @@ export function UserCard({ user }: UserCardProps) {
   if (!user) {
     return null;
   }
-
-  const handleOpenProfile = () => {
-    // Open user profile on BallCam
-    api.openUrl(`https://ballcam.tv/@${user.username}`);
-  };
 
   return (
     <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-4">
@@ -54,15 +47,6 @@ export function UserCard({ user }: UserCardProps) {
             Logged in
           </p>
         </div>
-
-        {/* Profile Link */}
-        <button
-          onClick={handleOpenProfile}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-violet-400 hover:text-violet-300 hover:bg-violet-500/10 rounded-lg transition-colors"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-          Profile
-        </button>
       </div>
     </div>
   );
