@@ -100,7 +100,9 @@ Write-Success "tauri.conf.json updated"
 # Update Cargo.lock
 Write-Step "Updating Cargo.lock..."
 Push-Location "$rootDir\src-tauri"
-cargo update -p ballcam-agent 2>$null
+$ErrorActionPreference = "Continue"
+cargo update -p ballcam-agent 2>&1 | Out-Null
+$ErrorActionPreference = "Stop"
 Pop-Location
 Write-Success "Cargo.lock updated"
 
