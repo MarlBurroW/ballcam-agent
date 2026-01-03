@@ -36,27 +36,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Decode signing key
-        shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY_BASE64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        run: |
-          # Decode base64 key and write to file
-          echo "$TAURI_SIGNING_PRIVATE_KEY_BASE64" | base64 -d > "$RUNNER_TEMP/tauri.key"
-          echo "Signing key written to file"
-          echo "File size: $(wc -c < "$RUNNER_TEMP/tauri.key") bytes"
-          echo "File content preview:"
-          head -n1 "$RUNNER_TEMP/tauri.key"
-
-          # Convert to Windows path for Tauri
-          WIN_PATH=$(cygpath -w "$RUNNER_TEMP/tauri.key")
-          echo "TAURI_KEY_PATH=$WIN_PATH" >> $GITHUB_ENV
-
       - name: Build and Release
         uses: tauri-apps/tauri-action@v0.5.16
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ env.TAURI_KEY_PATH }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           tagName: ${{ github.ref_name }}
