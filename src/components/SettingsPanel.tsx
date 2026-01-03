@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, Globe, Lock, FolderOpen, Bell, Power, Info, Download } from 'lucide-react';
+import { Loader2, Globe, Lock, FolderOpen, Bell, Power, Info, Download, Check, AlertCircle, RefreshCw } from 'lucide-react';
 import { getVersion } from '@tauri-apps/api/app';
 import type { AppConfig, Visibility } from '@/lib/types';
 import * as api from '@/lib/api';
@@ -11,7 +11,14 @@ export function SettingsPanel() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState<string>('');
-  const { updateAvailable, isChecking, isDownloading, downloadProgress, checkForUpdates, downloadAndInstall } = useUpdater();
+  const {
+    updateAvailable,
+    status,
+    downloadProgress,
+    error: updateError,
+    checkForUpdates,
+    downloadAndInstall
+  } = useUpdater();
 
   useEffect(() => {
     loadConfig();
@@ -180,7 +187,7 @@ export function SettingsPanel() {
 
       {/* About / Version */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-violet-500/20 rounded-lg flex items-center justify-center">
               <Info className="w-4 h-4 text-violet-400" />
@@ -190,38 +197,78 @@ export function SettingsPanel() {
               <p className="text-xs text-gray-500">Version {version}</p>
             </div>
           </div>
-          {updateAvailable ? (
+
+          {/* Update button based on status */}
+          {status === 'available' && updateAvailable && (
             <button
               onClick={downloadAndInstall}
-              disabled={isDownloading}
-              className="flex items-center gap-2 px-3 py-1.5 bg-violet-500 hover:bg-violet-600 disabled:bg-violet-500/50 text-white text-xs font-medium rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 bg-violet-500 hover:bg-violet-600 text-white text-xs font-medium rounded-lg transition-colors"
             >
-              {isDownloading ? (
-                <>
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  {downloadProgress}%
-                </>
-              ) : (
-                <>
-                  <Download className="w-3 h-3" />
-                  Update to {updateAvailable.version}
-                </>
-              )}
+              <Download className="w-3 h-3" />
+              Update to {updateAvailable.version}
             </button>
-          ) : (
+          )}
+
+          {status === 'downloading' && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-violet-500/20 text-violet-300 text-xs font-medium rounded-lg">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Downloading {downloadProgress}%
+            </div>
+          )}
+
+          {status === 'checking' && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-700/50 text-gray-400 text-xs font-medium rounded-lg">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Checking...
+            </div>
+          )}
+
+          {status === 'up-to-date' && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 text-green-400 text-xs font-medium rounded-lg">
+              <Check className="w-3 h-3" />
+              Up to date
+            </div>
+          )}
+
+          {status === 'idle' && (
             <button
               onClick={checkForUpdates}
-              disabled={isChecking}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-700/50 text-gray-300 text-xs font-medium rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-medium rounded-lg transition-colors"
             >
-              {isChecking ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                'Check for updates'
-              )}
+              <RefreshCw className="w-3 h-3" />
+              Check for updates
+            </button>
+          )}
+
+          {status === 'error' && (
+            <button
+              onClick={checkForUpdates}
+              className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-medium rounded-lg transition-colors"
+            >
+              <AlertCircle className="w-3 h-3" />
+              Retry
             </button>
           )}
         </div>
+
+        {/* Update error message */}
+        {updateError && (
+          <div className="mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+            <p className="text-xs text-red-400">{updateError}</p>
+          </div>
+        )}
+
+        {/* Download progress bar */}
+        {status === 'downloading' && (
+          <div className="mt-3">
+            <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-violet-500 transition-all duration-300"
+                style={{ width: `${downloadProgress}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (
