@@ -36,6 +36,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Debug signing key
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          echo "Key length: $($env:TAURI_SIGNING_PRIVATE_KEY.Length)"
+          echo "Key starts with: $($env:TAURI_SIGNING_PRIVATE_KEY.Substring(0, 30))..."
+          echo "Password set: $($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD.Length -gt 0)"
+
       - name: Build and Release
         uses: tauri-apps/tauri-action@v0.5.16
         env:
