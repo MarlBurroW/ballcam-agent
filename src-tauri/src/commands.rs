@@ -422,6 +422,40 @@ pub fn get_history(app: AppHandle) -> Result<Vec<UploadRecord>, String> {
     Ok(history.records)
 }
 
+/// Retry a failed upload by record ID
+#[tauri::command]
+pub async fn retry_upload(
+    app: AppHandle,
+    record_id: String,
+) -> Result<UploadRecord, String> {
+    // Find the record in history
+    let history = config::load_history(&app)?;
+    let record = history
+        .records
+        .iter()
+        .find(|r| r.id == record_id)
+        .ok_or("Record not found")?;
+
+    // Check if the file still exists
+    let file_path = record.file_path.clone();
+    if !std::path::Path::new(&file_path).exists() {
+        return Err("Replay file no longer exists".to_string());
+    }
+
+    // Re-upload using the same file path
+    let uploader = Uploader::new();
+    let result = uploader.upload_replay(&app, &file_path, None).await;
+
+    // If upload succeeded, remove the old failed record
+    if result.is_ok() {
+        let mut history = config::load_history(&app)?;
+        history.records.retain(|r| r.id != record_id);
+        let _ = config::save_history(&app, &history);
+    }
+
+    result
+}
+
 /// Detect the Rocket League replay folder
 #[tauri::command]
 pub fn detect_replay_folder() -> Result<String, String> {

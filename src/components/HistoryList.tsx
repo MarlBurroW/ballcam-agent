@@ -77,7 +77,7 @@ export function HistoryList() {
       </div>
 
       {records.map((record) => (
-        <HistoryItem key={record.id} record={record} />
+        <HistoryItem key={record.id} record={record} onRetryComplete={loadHistory} />
       ))}
 
       {/* Load more button */}

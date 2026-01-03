@@ -53,12 +53,16 @@ export async function uploadReplay(
   return invoke('upload_replay', { filePath, visibility });
 }
 
-// History commands (to be implemented)
+// History commands
 export async function getHistory(): Promise<UploadRecord[]> {
   return invoke('get_history');
 }
 
-// Watcher commands (to be implemented)
+export async function retryUpload(recordId: string): Promise<UploadRecord> {
+  return invoke('retry_upload', { recordId });
+}
+
+// Watcher commands
 export async function pauseWatcher(): Promise<void> {
   return invoke('pause_watcher');
 }

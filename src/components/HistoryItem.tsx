@@ -1,13 +1,34 @@
-import { CheckCircle2, XCircle, Clock, Loader2, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { CheckCircle2, XCircle, Clock, Loader2, ExternalLink, RotateCcw } from 'lucide-react';
 import type { UploadRecord } from '@/lib/types';
 import * as api from '@/lib/api';
 
 interface HistoryItemProps {
   record: UploadRecord;
+  onRetryComplete?: () => void;
 }
 
-export function HistoryItem({ record }: HistoryItemProps) {
+export function HistoryItem({ record, onRetryComplete }: HistoryItemProps) {
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+
+  const handleRetry = async () => {
+    setIsRetrying(true);
+    setRetryError(null);
+    try {
+      await api.retryUpload(record.id);
+      onRetryComplete?.();
+    } catch (err) {
+      setRetryError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
   const getStatusIcon = () => {
+    if (isRetrying) {
+      return <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />;
+    }
     switch (record.status) {
       case 'completed':
         return <CheckCircle2 className="w-5 h-5 text-green-400" />;
@@ -66,7 +87,7 @@ export function HistoryItem({ record }: HistoryItemProps) {
               </p>
             </div>
             <span className={`text-xs font-medium ${getStatusColor()}`}>
-              {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+              {isRetrying ? 'Retrying...' : record.status.charAt(0).toUpperCase() + record.status.slice(1)}
             </span>
           </div>
 
@@ -80,8 +101,19 @@ export function HistoryItem({ record }: HistoryItemProps) {
             </button>
           )}
 
-          {record.status === 'failed' && record.errorMessage && (
-            <p className="mt-2 text-xs text-red-400/80">{record.errorMessage}</p>
+          {record.status === 'failed' && !isRetrying && (
+            <div className="mt-2 space-y-2">
+              {(record.errorMessage || retryError) && (
+                <p className="text-xs text-red-400/80">{retryError || record.errorMessage}</p>
+              )}
+              <button
+                onClick={handleRetry}
+                className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Retry upload
+              </button>
+            </div>
           )}
 
           {record.attempts > 1 && (

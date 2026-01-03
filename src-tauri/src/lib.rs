@@ -144,6 +144,7 @@ pub fn run() {
             // Upload commands
             commands::upload_replay,
             commands::get_history,
+            commands::retry_upload,
             // Folder detection
             commands::detect_replay_folder,
             commands::detect_all_replay_folders,
