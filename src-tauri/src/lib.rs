@@ -148,6 +148,11 @@ pub fn run() {
             // Folder detection
             commands::detect_replay_folder,
             commands::detect_all_replay_folders,
+            // Folder info commands
+            commands::get_folder_info,
+            commands::open_folder,
+            // Upload statistics
+            commands::get_upload_stats,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

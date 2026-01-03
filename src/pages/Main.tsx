@@ -1,43 +1,102 @@
 import { useState, useEffect } from 'react';
-import { Eye, Upload, Clock, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Eye, Upload, Clock, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { listen } from '@tauri-apps/api/event';
-import type { UploadRecord, WatcherState } from '@/lib/types';
+import type { FolderInfo as FolderInfoType, UploadProgress as UploadProgressType, UploadRecord, UploadStats as UploadStatsType, User, WatcherState } from '@/lib/types';
+import { UserCard } from '@/components/StatusPage/UserCard';
+import { FolderInfo } from '@/components/StatusPage/FolderInfo';
+import { UploadStats } from '@/components/StatusPage/UploadStats';
 import * as api from '@/lib/api';
+import { UploadProgress } from '@/components/StatusPage/UploadProgress';
+import { WatcherControl } from '@/components/StatusPage/WatcherControl';
 
 export function Main() {
   const [watcherState, setWatcherState] = useState<WatcherState | null>(null);
   const [lastUpload, setLastUpload] = useState<UploadRecord | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgressType | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [folderInfo, setFolderInfo] = useState<FolderInfoType | null>(null);
+  const [uploadStats, setUploadStats] = useState<UploadStatsType | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refreshWatcherState = async () => {
+    try {
+      const state = await api.getWatcherStatus();
+      setWatcherState(state);
+    } catch (err) {
+      console.error('Failed to load watcher state:', err);
+    }
+  };
+
+  const loadUserData = async () => {
+    try {
+      const session = await api.getSession();
+      if (session) {
+        setUser(session.user);
+      }
+    } catch (err) {
+      console.error('Failed to load user data:', err);
+    }
+  };
+
+  const loadFolderInfo = async () => {
+    try {
+      const info = await api.getFolderInfo();
+      setFolderInfo(info);
+    } catch (err) {
+      console.error('Failed to load folder info:', err);
+    }
+  };
+
+  const loadUploadStats = async () => {
+    try {
+      const stats = await api.getUploadStats();
+      setUploadStats(stats);
+    } catch (err) {
+      console.error('Failed to load upload stats:', err);
+    }
+  };
 
   useEffect(() => {
-    // Load initial watcher state
-    const loadState = async () => {
-      try {
-        const state = await api.getWatcherStatus();
-        setWatcherState(state);
-      } catch (err) {
-        console.error('Failed to load watcher state:', err);
-      }
+    // Load initial data
+    const loadAllData = async () => {
+      await Promise.all([
+        refreshWatcherState(),
+        loadUserData(),
+        loadFolderInfo(),
+        loadUploadStats(),
+      ]);
+      setIsLoading(false);
     };
-    loadState();
+    loadAllData();
 
     // Listen for upload events
     const unlistenStarted = listen<UploadRecord>('upload_started', () => {
       setIsUploading(true);
+      setUploadProgress(null);
+    });
+
+    const unlistenProgress = listen<UploadProgressType>('upload_progress', (event) => {
+      setUploadProgress(event.payload);
     });
 
     const unlistenCompleted = listen<UploadRecord>('upload_completed', (event) => {
       setIsUploading(false);
+      setUploadProgress(null);
       setLastUpload(event.payload);
+      // Refresh stats after successful upload
+      loadUploadStats();
     });
 
     const unlistenFailed = listen<UploadRecord>('upload_failed', (event) => {
       setIsUploading(false);
+      setUploadProgress(null);
       setLastUpload(event.payload);
     });
 
     return () => {
       unlistenStarted.then((fn) => fn());
+      unlistenProgress.then((fn) => fn());
       unlistenCompleted.then((fn) => fn());
       unlistenFailed.then((fn) => fn());
     };
@@ -76,6 +135,18 @@ export function Main() {
     return 'bg-yellow-500';
   };
 
+  // Show loading state while initial data is loading
+  if (isLoading) {
+    return (
+      <div className="p-4 flex items-center justify-center h-64">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+          <p className="text-sm text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 space-y-6">
       {/* Status Card */}
@@ -97,6 +168,21 @@ export function Main() {
           </div>
         </div>
       </div>
+
+      {/* User Card */}
+      <UserCard user={user} />
+
+      {/* Upload Progress */}
+      <UploadProgress progress={uploadProgress} isUploading={isUploading} />
+
+      {/* Watcher Control */}
+      <WatcherControl watcherState={watcherState} onStateChange={refreshWatcherState} />
+
+      {/* Folder Info */}
+      <FolderInfo folderInfo={folderInfo} />
+
+      {/* Upload Stats */}
+      <UploadStats stats={uploadStats} />
 
       {/* Pending Files */}
       {watcherState?.pendingFiles && watcherState.pendingFiles.length > 0 && (

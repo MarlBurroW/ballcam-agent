@@ -3,7 +3,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
 use crate::config;
-use crate::types::{AuthSession, UploadRecord, UploadStatus, Visibility};
+use crate::types::{AuthSession, UploadProgress, UploadRecord, UploadStatus, Visibility};
 
 // Use localhost in dev mode, production URL otherwise
 #[cfg(dev)]
@@ -43,6 +43,12 @@ impl Uploader {
             .unwrap_or("unknown.replay")
             .to_string();
 
+        // Get file size for progress tracking and statistics
+        let file_size = tokio::fs::metadata(file_path)
+            .await
+            .map(|m| m.len())
+            .ok();
+
         // Create initial upload record
         let mut record = UploadRecord {
             id: uuid::Uuid::new_v4().to_string(),
@@ -55,10 +61,25 @@ impl Uploader {
             attempts: 0,
             created_at: chrono::Utc::now().to_rfc3339(),
             completed_at: None,
+            file_size,
         };
 
         // Emit upload started event
         let _ = app.emit("upload_started", &record);
+
+        // Emit initial progress (0%)
+        if let Some(total_bytes) = file_size {
+            let progress = UploadProgress {
+                id: record.id.clone(),
+                filename: filename.clone(),
+                bytes_uploaded: 0,
+                total_bytes,
+                percentage: 0,
+                speed: 0,
+                estimated_remaining: None,
+            };
+            let _ = app.emit("upload_progress", &progress);
+        }
 
         // Get visibility from config if not specified
         let visibility = match visibility {
@@ -82,6 +103,20 @@ impl Uploader {
                     record.replay_id = Some(replay_id);
                     record.replay_url = Some(replay_url.clone());
                     record.completed_at = Some(chrono::Utc::now().to_rfc3339());
+
+                    // Emit final progress (100%)
+                    if let Some(total_bytes) = file_size {
+                        let progress = UploadProgress {
+                            id: record.id.clone(),
+                            filename: filename.clone(),
+                            bytes_uploaded: total_bytes,
+                            total_bytes,
+                            percentage: 100,
+                            speed: 0,
+                            estimated_remaining: Some(0),
+                        };
+                        let _ = app.emit("upload_progress", &progress);
+                    }
 
                     // Save to history
                     self.save_to_history(app, &record)?;

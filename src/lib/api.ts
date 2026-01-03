@@ -5,7 +5,9 @@ import type {
   DetectedFolder,
   DeviceCodeResponse,
   DevicePollResult,
+  FolderInfo,
   UploadRecord,
+  UploadStats,
   User,
   WatcherState,
 } from './types';
@@ -91,6 +93,20 @@ export async function detectReplayFolder(): Promise<string> {
 
 export async function detectAllReplayFolders(): Promise<DetectedFolder[]> {
   return invoke('detect_all_replay_folders');
+}
+
+// Folder info commands
+export async function getFolderInfo(): Promise<FolderInfo> {
+  return invoke('get_folder_info');
+}
+
+export async function openFolder(path: string): Promise<void> {
+  return invoke('open_folder', { path });
+}
+
+// Upload statistics
+export async function getUploadStats(): Promise<UploadStats> {
+  return invoke('get_upload_stats');
 }
 
 // Open URL in default browser

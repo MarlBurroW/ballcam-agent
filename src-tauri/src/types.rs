@@ -142,6 +142,9 @@ pub struct UploadRecord {
     pub attempts: u32,
     pub created_at: String,
     pub completed_at: Option<String>,
+    /// File size in bytes (for statistics tracking)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_size: Option<u64>,
 }
 
 /// Upload history collection
@@ -169,4 +172,58 @@ pub struct WatcherState {
     pub is_paused: bool,
     pub last_event_at: Option<String>,
     pub pending_files: Vec<String>,
+}
+
+// ============================================================================
+// Status Page Enhancement Types
+// ============================================================================
+
+/// Real-time upload progress information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadProgress {
+    /// Upload record ID
+    pub id: String,
+    /// Name of file being uploaded
+    pub filename: String,
+    /// Bytes transferred so far
+    pub bytes_uploaded: u64,
+    /// Total file size in bytes
+    pub total_bytes: u64,
+    /// Progress percentage (0-100)
+    pub percentage: u8,
+    /// Current upload speed in bytes/second
+    pub speed: u64,
+    /// Estimated seconds remaining
+    pub estimated_remaining: Option<u64>,
+}
+
+/// Aggregated upload statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadStats {
+    /// Count of all completed uploads
+    pub total_uploads: u32,
+    /// Count of all failed uploads
+    pub total_failed: u32,
+    /// Percentage of successful uploads (0-100)
+    pub success_rate: f32,
+    /// Sum of all successfully uploaded file sizes in bytes
+    pub total_bytes_uploaded: u64,
+    /// Human-readable size (e.g., "1.2 GB")
+    pub total_bytes_formatted: String,
+}
+
+/// Information about the watched folder for display
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderInfo {
+    /// Full folder path
+    pub path: String,
+    /// Truncated path for display
+    pub display_path: String,
+    /// Detected game platform
+    pub platform: String,
+    /// Whether folder currently exists
+    pub exists: bool,
 }

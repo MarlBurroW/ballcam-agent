@@ -1,7 +1,7 @@
 use crate::config;
 use crate::types::{
     AppConfig, AuthSession, DeviceCodeResponse, DevicePollResult, DeviceTokenResponse,
-    UploadRecord, User, Visibility, WatcherState,
+    FolderInfo, UploadRecord, UploadStats, UploadStatus, User, Visibility, WatcherState,
 };
 use crate::uploader::Uploader;
 use crate::AppState;
@@ -466,4 +466,144 @@ pub fn detect_replay_folder() -> Result<String, String> {
 #[tauri::command]
 pub fn detect_all_replay_folders() -> Vec<config::DetectedFolder> {
     config::detect_all_replay_folders()
+}
+
+// ============================================================================
+// Folder Info Commands
+// ============================================================================
+
+/// Truncate path for display (keeps last N characters with ellipsis)
+fn truncate_path(path: &str, max_len: usize) -> String {
+    if path.len() <= max_len {
+        path.to_string()
+    } else {
+        let start = path.len() - max_len + 3; // +3 for "..."
+        format!("...{}", &path[start..])
+    }
+}
+
+/// Detect platform from folder path
+fn detect_platform(path: &str) -> String {
+    if path.contains("DemosEpic") {
+        "epic".to_string()
+    } else if path.contains("Demos") {
+        "steam".to_string()
+    } else {
+        "unknown".to_string()
+    }
+}
+
+/// Get information about the watched folder
+#[tauri::command]
+pub fn get_folder_info(app: AppHandle) -> Result<FolderInfo, String> {
+    let config = config::load_config(&app)?;
+    let path = config.replay_folder;
+
+    if path.is_empty() {
+        return Err("No replay folder configured".to_string());
+    }
+
+    let exists = std::path::Path::new(&path).exists();
+    let platform = detect_platform(&path);
+    let display_path = truncate_path(&path, 40);
+
+    Ok(FolderInfo {
+        path,
+        display_path,
+        platform,
+        exists,
+    })
+}
+
+/// Open the watched folder in the system file explorer
+#[tauri::command]
+pub async fn open_folder(path: String) -> Result<(), String> {
+    use std::process::Command;
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// Upload Statistics Commands
+// ============================================================================
+
+/// Format bytes to human-readable string
+fn format_bytes(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+
+    if bytes >= GB {
+        format!("{:.1} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.1} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} B", bytes)
+    }
+}
+
+/// Get aggregated upload statistics from history
+#[tauri::command]
+pub fn get_upload_stats(app: AppHandle) -> Result<UploadStats, String> {
+    let history = config::load_history(&app)?;
+
+    let mut total_uploads: u32 = 0;
+    let mut total_failed: u32 = 0;
+    let mut total_bytes_uploaded: u64 = 0;
+
+    for record in &history.records {
+        match record.status {
+            UploadStatus::Completed => {
+                total_uploads += 1;
+                if let Some(size) = record.file_size {
+                    total_bytes_uploaded += size;
+                }
+            }
+            UploadStatus::Failed => {
+                total_failed += 1;
+            }
+            _ => {}
+        }
+    }
+
+    let total_attempts = total_uploads + total_failed;
+    let success_rate = if total_attempts > 0 {
+        (total_uploads as f32 / total_attempts as f32) * 100.0
+    } else {
+        0.0
+    };
+
+    Ok(UploadStats {
+        total_uploads,
+        total_failed,
+        success_rate,
+        total_bytes_uploaded,
+        total_bytes_formatted: format_bytes(total_bytes_uploaded),
+    })
 }

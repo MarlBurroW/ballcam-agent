@@ -74,6 +74,8 @@ export interface UploadRecord {
   attempts: number;
   createdAt: string;
   completedAt?: string;
+  /** File size in bytes (for statistics tracking) */
+  fileSize?: number;
 }
 
 // Watcher runtime state
@@ -88,4 +90,52 @@ export interface WatcherState {
 export interface DetectedFolder {
   path: string;
   platform: 'steam' | 'epic';
+}
+
+// ============================================================================
+// Status Page Enhancement Types
+// ============================================================================
+
+// Real-time upload progress information
+export interface UploadProgress {
+  /** Upload record ID */
+  id: string;
+  /** Name of file being uploaded */
+  filename: string;
+  /** Bytes transferred so far */
+  bytesUploaded: number;
+  /** Total file size in bytes */
+  totalBytes: number;
+  /** Progress percentage (0-100) */
+  percentage: number;
+  /** Current upload speed in bytes/second */
+  speed: number;
+  /** Estimated seconds remaining */
+  estimatedRemaining?: number;
+}
+
+// Aggregated upload statistics
+export interface UploadStats {
+  /** Count of all completed uploads */
+  totalUploads: number;
+  /** Count of all failed uploads */
+  totalFailed: number;
+  /** Percentage of successful uploads (0-100) */
+  successRate: number;
+  /** Sum of all successfully uploaded file sizes in bytes */
+  totalBytesUploaded: number;
+  /** Human-readable size (e.g., "1.2 GB") */
+  totalBytesFormatted: string;
+}
+
+// Information about the watched folder for display
+export interface FolderInfo {
+  /** Full folder path */
+  path: string;
+  /** Truncated path for display */
+  displayPath: string;
+  /** Detected game platform */
+  platform: 'steam' | 'epic' | 'unknown';
+  /** Whether folder currently exists */
+  exists: boolean;
 }
