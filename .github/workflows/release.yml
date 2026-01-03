@@ -55,5 +55,6 @@ jobs:
             The app will auto-update when new versions are available.
           releaseDraft: false
           prerelease: false
+          includeUpdaterJson: true
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
