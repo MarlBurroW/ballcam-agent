@@ -6,16 +6,35 @@ use crate::config;
 use crate::types::{AuthSession, UploadProgress, UploadRecord, UploadStatus, Visibility};
 use crate::AppState;
 
-// Use localhost in dev mode, production URL otherwise
-#[cfg(dev)]
-const API_BASE_URL: &str = "http://localhost:3000/api";
-#[cfg(not(dev))]
-const API_BASE_URL: &str = "https://api.ballcam.tv/api";
+/// Get API base URL - can be overridden with BALLCAM_API_URL env var for testing
+fn get_api_base_url() -> String {
+    if let Ok(url) = std::env::var("BALLCAM_API_URL") {
+        return url;
+    }
+    #[cfg(dev)]
+    {
+        "http://localhost:3000/api".to_string()
+    }
+    #[cfg(not(dev))]
+    {
+        "https://api.ballcam.tv/api".to_string()
+    }
+}
 
-#[cfg(dev)]
-const FRONTEND_URL: &str = "http://localhost:5173";
-#[cfg(not(dev))]
-const FRONTEND_URL: &str = "https://ballcam.tv";
+/// Get frontend URL - can be overridden with BALLCAM_get_frontend_url() env var for testing
+fn get_frontend_url() -> String {
+    if let Ok(url) = std::env::var("BALLCAM_get_frontend_url()") {
+        return url;
+    }
+    #[cfg(dev)]
+    {
+        "http://localhost:5173".to_string()
+    }
+    #[cfg(not(dev))]
+    {
+        "https://ballcam.tv".to_string()
+    }
+}
 
 const MAX_RETRIES: u32 = 3;
 const RETRY_DELAYS: [u64; 3] = [1, 2, 4]; // seconds
@@ -202,7 +221,7 @@ impl Uploader {
         // Send request
         let response = self
             .client
-            .post(format!("{}/replays", API_BASE_URL))
+            .post(format!("{}/replays", get_api_base_url()))
             .header(
                 "Cookie",
                 format!("access_token={}", session.access_token),
@@ -242,7 +261,7 @@ impl Uploader {
             .and_then(|v| v.as_str().map(|s| s.to_string()).or_else(|| v.as_i64().map(|n| n.to_string())))
             .ok_or_else(|| format!("No replay ID in response. Response: {}", body_text))?;
 
-        let replay_url = format!("{}/replays/{}", FRONTEND_URL, replay_id);
+        let replay_url = format!("{}/replays/{}", get_frontend_url(), replay_id);
 
         Ok((replay_id, replay_url))
     }
@@ -269,7 +288,7 @@ impl Uploader {
     async fn refresh_session(&self, app: &AppHandle, session: &AuthSession) -> Result<AuthSession, String> {
         let response = self
             .client
-            .post(format!("{}/auth/refresh", API_BASE_URL))
+            .post(format!("{}/auth/refresh", get_api_base_url()))
             .header(
                 "Cookie",
                 format!("refresh_token={}", session.refresh_token),

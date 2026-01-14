@@ -5,10 +5,20 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 use tokio::time::{interval, Duration};
 
-#[cfg(debug_assertions)]
-const API_BASE_URL: &str = "http://localhost:3000/api";
-#[cfg(not(debug_assertions))]
-const API_BASE_URL: &str = "https://api.ballcam.tv/api";
+/// Get API base URL - can be overridden with BALLCAM_API_URL env var for testing
+fn get_api_base_url() -> String {
+    if let Ok(url) = std::env::var("BALLCAM_API_URL") {
+        return url;
+    }
+    #[cfg(debug_assertions)]
+    {
+        "http://localhost:3000/api".to_string()
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        "https://api.ballcam.tv/api".to_string()
+    }
+}
 
 const HEALTH_CHECK_INTERVAL_SECS: u64 = 60;
 const HEALTH_CHECK_TIMEOUT_SECS: u64 = 10;
@@ -83,7 +93,7 @@ impl HealthChecker {
 
         let result = tokio::time::timeout(
             Duration::from_secs(HEALTH_CHECK_TIMEOUT_SECS),
-            client.get(format!("{}/health", API_BASE_URL)).send(),
+            client.get(format!("{}/health", get_api_base_url())).send(),
         )
         .await;
 
@@ -169,7 +179,7 @@ impl HealthChecker {
                     .unwrap_or_default();
 
                 let result = client
-                    .get(format!("{}/health", API_BASE_URL))
+                    .get(format!("{}/health", get_api_base_url()))
                     .send()
                     .await;
 

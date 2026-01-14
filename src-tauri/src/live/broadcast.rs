@@ -9,7 +9,7 @@
 use crate::types::{BroadcastState, GameInfo, GameSnapshot, Visibility};
 use bytes::Bytes;
 use rust_socketio::asynchronous::{Client, ClientBuilder};
-use rust_socketio::Payload;
+use rust_socketio::{Payload, TransportType};
 use serde_json::json;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -20,11 +20,20 @@ use tokio::sync::Mutex;
 use super::encoder::encode_snapshot;
 
 /// Base URL for ballcam.tv Socket.IO server
-#[cfg(dev)]
-const BALLCAM_SOCKET_URL: &str = "http://localhost:3000";
-
-#[cfg(not(dev))]
-const BALLCAM_SOCKET_URL: &str = "https://api.ballcam.tv";
+/// Can be overridden with BALLCAM_SOCKET_URL env var for testing
+fn get_socket_url() -> String {
+    if let Ok(url) = std::env::var("BALLCAM_SOCKET_URL") {
+        return url;
+    }
+    #[cfg(dev)]
+    {
+        "http://localhost:3000".to_string()
+    }
+    #[cfg(not(dev))]
+    {
+        "https://api.ballcam.tv".to_string()
+    }
+}
 
 /// Socket.IO namespace for live streaming
 const LIVE_NAMESPACE: &str = "/live";
@@ -149,16 +158,19 @@ impl BroadcastManager {
         *self.pending_viewer_count.lock().await = 0;
 
         // Build Socket.IO connection with auth
-        tracing::info!("Connecting to Socket.IO at: {} namespace: {}", BALLCAM_SOCKET_URL, LIVE_NAMESPACE);
+        let socket_url = get_socket_url();
+        tracing::info!("Connecting to Socket.IO at: {} namespace: {}", socket_url, LIVE_NAMESPACE);
 
         // Clone Arcs for the viewer-count listener
         let state_for_viewer = self.state.clone();
         let app_for_viewer = self.app_handle.clone();
         let pending_count_for_viewer = self.pending_viewer_count.clone();
 
-        let socket = ClientBuilder::new(BALLCAM_SOCKET_URL)
+        let socket = ClientBuilder::new(&socket_url)
             .namespace(LIVE_NAMESPACE)
-            // Don't force WebSocket - let it auto-negotiate (polling first, then upgrade)
+            // Force WebSocket transport to avoid sticky session issues with multiple backend replicas
+            // (HTTP polling requires session affinity which rust_socketio doesn't support via cookies)
+            .transport_type(TransportType::Websocket)
             .auth(json!({
                 "token": token,
                 "role": "broadcaster"

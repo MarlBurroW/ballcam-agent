@@ -9,11 +9,20 @@ use crate::AppState;
 use std::path::PathBuf;
 use tauri::{AppHandle, State};
 
-// Use localhost in dev mode, production URL otherwise
-#[cfg(dev)]
-const API_BASE_URL: &str = "http://localhost:3000/api";
-#[cfg(not(dev))]
-const API_BASE_URL: &str = "https://api.ballcam.tv/api";
+/// Get API base URL - can be overridden with BALLCAM_API_URL env var for testing
+fn get_api_base_url() -> String {
+    if let Ok(url) = std::env::var("BALLCAM_API_URL") {
+        return url;
+    }
+    #[cfg(dev)]
+    {
+        "http://localhost:3000/api".to_string()
+    }
+    #[cfg(not(dev))]
+    {
+        "https://api.ballcam.tv/api".to_string()
+    }
+}
 
 /// Get the current app configuration
 #[tauri::command]
@@ -47,7 +56,7 @@ pub async fn login(
     // Build the request
     let client = reqwest::Client::new();
     let response = client
-        .post(format!("{}/auth/login", API_BASE_URL))
+        .post(format!("{}/auth/login", get_api_base_url()))
         .header("Content-Type", "application/json")
         .body(serde_json::to_string(&serde_json::json!({
             "email": email,
@@ -137,7 +146,7 @@ pub async fn logout(app: AppHandle) -> Result<(), String> {
     if let Ok(Some(session)) = config::load_session(&app) {
         let client = reqwest::Client::new();
         let _ = client
-            .post(format!("{}/auth/logout", API_BASE_URL))
+            .post(format!("{}/auth/logout", get_api_base_url()))
             .header("Cookie", format!("refresh_token={}", session.refresh_token))
             .send()
             .await;
@@ -174,7 +183,7 @@ pub async fn request_device_code() -> Result<DeviceCodeResponse, String> {
 
     let client = reqwest::Client::new();
     let response = client
-        .post(format!("{}/auth/device/code", API_BASE_URL))
+        .post(format!("{}/auth/device/code", get_api_base_url()))
         .header("Content-Type", "application/json")
         .json(&serde_json::json!({
             "client_id": "ballcam-agent",
@@ -214,7 +223,7 @@ pub async fn poll_device_token(
 ) -> Result<DevicePollResult, String> {
     let client = reqwest::Client::new();
     let response = client
-        .post(format!("{}/auth/device/token", API_BASE_URL))
+        .post(format!("{}/auth/device/token", get_api_base_url()))
         .header("Content-Type", "application/json")
         .json(&serde_json::json!({
             "device_code": device_code,
@@ -295,7 +304,7 @@ pub async fn refresh_device_token(app: AppHandle) -> Result<User, String> {
 
     let client = reqwest::Client::new();
     let response = client
-        .post(format!("{}/auth/device/refresh", API_BASE_URL))
+        .post(format!("{}/auth/device/refresh", get_api_base_url()))
         .header("Content-Type", "application/json")
         .json(&serde_json::json!({
             "access_token": session.access_token,
@@ -363,7 +372,7 @@ pub async fn fetch_me(
         .unwrap_or_default();
 
     let response = match client
-        .get(format!("{}/users/me", API_BASE_URL))
+        .get(format!("{}/users/me", get_api_base_url()))
         .header("Authorization", format!("Bearer {}", session.access_token))
         .send()
         .await
@@ -768,7 +777,7 @@ pub async fn get_environments(
         .build()
         .unwrap_or_default();
 
-    let mut request = client.get(format!("{}/environments", API_BASE_URL));
+    let mut request = client.get(format!("{}/environments", get_api_base_url()));
 
     // Add auth if we have a session
     if let Some(session) = session {
