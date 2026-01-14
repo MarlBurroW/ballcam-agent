@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Loader2 } from 'lucide-react';
 import { Setup } from './pages/Setup';
 import { Main } from './pages/Main';
@@ -48,6 +49,15 @@ function App() {
     };
     checkState();
   }, []);
+
+  // Show window once loading is complete
+  const windowShown = useRef(false);
+  useEffect(() => {
+    if (!isLoading && !windowShown.current) {
+      windowShown.current = true;
+      getCurrentWindow().show();
+    }
+  }, [isLoading]);
 
   // Listen for tray menu events
   useEffect(() => {
