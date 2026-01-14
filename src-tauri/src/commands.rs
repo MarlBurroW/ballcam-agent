@@ -1,7 +1,8 @@
 use crate::config;
 use crate::types::{
-    AppConfig, AuthSession, DeviceCodeResponse, DevicePollResult, DeviceTokenResponse,
-    FolderInfo, UploadRecord, UploadStats, UploadStatus, User, Visibility, WatcherState,
+    AppConfig, AuthSession, BroadcastState, DeviceCodeResponse, DevicePollResult, DeviceTokenResponse,
+    Environment, EnvironmentsResponse, FolderInfo, LiveConnectionState, UploadRecord, UploadStats,
+    UploadStatus, User, Visibility, WatcherState,
 };
 use crate::uploader::Uploader;
 use crate::AppState;
@@ -12,7 +13,7 @@ use tauri::{AppHandle, State};
 #[cfg(dev)]
 const API_BASE_URL: &str = "http://localhost:3000/api";
 #[cfg(not(dev))]
-const API_BASE_URL: &str = "https://ballcam.tv/api";
+const API_BASE_URL: &str = "https://api.ballcam.tv/api";
 
 /// Get the current app configuration
 #[tauri::command]
@@ -346,6 +347,64 @@ pub async fn refresh_device_token(app: AppHandle) -> Result<User, String> {
     Ok(updated_session.user)
 }
 
+/// Fetch current user profile from /api/users/me and update session
+#[tauri::command]
+pub async fn fetch_me(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<User, String> {
+    let session = config::load_session(&app)?
+        .ok_or("No session found")?;
+
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .unwrap_or_default();
+
+    let response = match client
+        .get(format!("{}/users/me", API_BASE_URL))
+        .header("Authorization", format!("Bearer {}", session.access_token))
+        .send()
+        .await
+    {
+        Ok(resp) => resp,
+        Err(e) => {
+            let error_msg = format!("Network error: {}", e);
+            state.health_checker.on_api_error(&app, &error_msg).await;
+            return Err(error_msg);
+        }
+    };
+
+    let status = response.status();
+
+    if status.as_u16() == 401 {
+        return Err("Session expired. Please re-login.".to_string());
+    }
+
+    if !status.is_success() {
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!("Failed to fetch user: {}", error_text));
+    }
+
+    let user: User = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse user response: {}", e))?;
+
+    // Update session with fresh user data
+    let updated_session = AuthSession {
+        user: user.clone(),
+        ..session
+    };
+
+    config::save_session(&app, &updated_session)?;
+
+    tracing::info!(username = %user.username, "User profile refreshed");
+
+    Ok(user)
+}
+
 /// Minimize the main window to system tray
 #[tauri::command]
 pub fn minimize_to_tray(app: AppHandle) -> Result<(), String> {
@@ -606,4 +665,173 @@ pub fn get_upload_stats(app: AppHandle) -> Result<UploadStats, String> {
         total_bytes_uploaded,
         total_bytes_formatted: format_bytes(total_bytes_uploaded),
     })
+}
+
+// ============================================================================
+// Live Viewer Commands
+// ============================================================================
+
+/// Get the current live connection state
+#[tauri::command]
+pub fn get_live_state(state: State<'_, AppState>) -> LiveConnectionState {
+    let live = state.live_manager.lock().unwrap();
+    live.get_state()
+}
+
+/// Start live monitoring
+#[tauri::command]
+pub fn start_live(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let mut live = state.live_manager.lock().unwrap();
+    live.start(app)
+}
+
+/// Stop live monitoring
+#[tauri::command]
+pub fn stop_live(state: State<'_, AppState>) -> Result<(), String> {
+    let mut live = state.live_manager.lock().unwrap();
+    live.stop()
+}
+
+// ============================================================================
+// Live Streaming (Broadcast) Commands
+// ============================================================================
+
+/// Start broadcasting to ballcam.tv
+#[tauri::command]
+pub async fn start_broadcast(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    visibility: Option<Visibility>,
+    environment_id: Option<String>,
+    title: Option<String>,
+) -> Result<(String, String, String, String, String), String> {
+    // Get session token
+    let session = config::load_session(&app)?
+        .ok_or("Not logged in")?;
+
+    let vis = visibility.unwrap_or_default();
+
+    // Start broadcast
+    let broadcast = state.broadcast_manager.lock().await;
+
+    // Ensure app_handle is set for event emission
+    broadcast.set_app_handle(app.clone()).await;
+
+    broadcast.start(&session.access_token, vis, environment_id, title).await
+}
+
+/// Stop the current broadcast
+#[tauri::command]
+pub async fn stop_broadcast(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let broadcast = state.broadcast_manager.lock().await;
+    broadcast.stop().await
+}
+
+/// Get the current broadcast state
+#[tauri::command]
+pub async fn get_broadcast_state(
+    state: State<'_, AppState>,
+) -> Result<BroadcastState, String> {
+    let broadcast = state.broadcast_manager.lock().await;
+    Ok(broadcast.get_state().await)
+}
+
+/// Set the stream title during an active broadcast
+/// Rate limited to 1 change per 5 seconds by the server
+#[tauri::command]
+pub async fn set_broadcast_title(
+    state: State<'_, AppState>,
+    title: String,
+) -> Result<String, String> {
+    let broadcast = state.broadcast_manager.lock().await;
+    broadcast.set_title(&title).await
+}
+
+// ============================================================================
+// Environment Commands
+// ============================================================================
+
+/// Get available environments from ballcam.tv
+#[tauri::command]
+pub async fn get_environments(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<Environment>, String> {
+    // Get session token (environments endpoint may need auth or work without)
+    let session = config::load_session(&app)?;
+
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .unwrap_or_default();
+
+    let mut request = client.get(format!("{}/environments", API_BASE_URL));
+
+    // Add auth if we have a session
+    if let Some(session) = session {
+        request = request.header("Authorization", format!("Bearer {}", session.access_token));
+    }
+
+    let response = match request.send().await {
+        Ok(resp) => resp,
+        Err(e) => {
+            let error_msg = format!("Network error: {}", e);
+            // Report to health checker
+            state.health_checker.on_api_error(&app, &error_msg).await;
+            return Err(error_msg);
+        }
+    };
+
+    let status = response.status();
+    if !status.is_success() {
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!("Failed to get environments: {}", error_text));
+    }
+
+    let env_response: EnvironmentsResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse environments: {}", e))?;
+
+    tracing::info!("Fetched {} environments", env_response.environments.len());
+
+    Ok(env_response.environments)
+}
+
+/// Set the environment during an active broadcast
+#[tauri::command]
+pub async fn set_broadcast_environment(
+    state: State<'_, AppState>,
+    environment_id: String,
+) -> Result<(), String> {
+    let broadcast = state.broadcast_manager.lock().await;
+    broadcast.set_environment(&environment_id).await
+}
+
+// ============================================================================
+// Health Check Commands
+// ============================================================================
+
+/// Get current service status
+#[tauri::command]
+pub async fn get_service_status(
+    state: State<'_, AppState>,
+) -> Result<crate::health::ServiceStatus, String> {
+    Ok(state.health_checker.get_status().await)
+}
+
+/// Trigger a health check and return result
+#[tauri::command]
+pub async fn check_service_health(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<bool, String> {
+    let is_available = state.health_checker.check_health(&app).await;
+    if !is_available {
+        state.health_checker.start_polling(app).await;
+    }
+    Ok(is_available)
 }

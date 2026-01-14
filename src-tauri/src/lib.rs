@@ -1,16 +1,23 @@
 pub mod commands;
 pub mod config;
+pub mod health;
+pub mod live;
 pub mod types;
 pub mod uploader;
 pub mod watcher;
 
 use std::sync::Mutex;
 use tauri::Manager;
+use health::HealthChecker;
+use live::{BroadcastManager, LiveManager};
 use watcher::FileWatcher;
 
-// Global state for the file watcher
+// Global state for the application
 pub struct AppState {
     pub watcher: Mutex<FileWatcher>,
+    pub live_manager: Mutex<LiveManager>,
+    pub broadcast_manager: tokio::sync::Mutex<BroadcastManager>,
+    pub health_checker: HealthChecker,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -36,6 +43,9 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(AppState {
             watcher: Mutex::new(FileWatcher::new()),
+            live_manager: Mutex::new(LiveManager::new()),
+            broadcast_manager: tokio::sync::Mutex::new(BroadcastManager::new()),
+            health_checker: HealthChecker::new(),
         })
         .setup(|app| {
             tracing::info!("BallCam Agent starting...");
@@ -92,6 +102,14 @@ pub fn run() {
                             "quit" => {
                                 if let Some(state) = app.try_state::<AppState>() {
                                     let _ = state.watcher.lock().unwrap().stop();
+                                    // Stop broadcast if active
+                                    tauri::async_runtime::block_on(async {
+                                        let broadcast_manager = state.broadcast_manager.lock().await;
+                                        if broadcast_manager.is_broadcasting().await {
+                                            tracing::info!("Stopping broadcast on app quit");
+                                            let _ = broadcast_manager.stop().await;
+                                        }
+                                    });
                                 }
                                 app.exit(0);
                             }
@@ -121,6 +139,18 @@ pub fn run() {
                 }
             }
 
+            // Run initial health check
+            let app_handle_health = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Some(state) = app_handle_health.try_state::<AppState>() {
+                    let is_available = state.health_checker.check_health(&app_handle_health).await;
+                    if !is_available {
+                        tracing::warn!("Service unavailable on startup, starting polling");
+                        state.health_checker.start_polling(app_handle_health.clone()).await;
+                    }
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -133,6 +163,7 @@ pub fn run() {
             commands::request_device_code,
             commands::poll_device_token,
             commands::refresh_device_token,
+            commands::fetch_me,
             // Window commands
             commands::minimize_to_tray,
             commands::show_window,
@@ -153,6 +184,21 @@ pub fn run() {
             commands::open_folder,
             // Upload statistics
             commands::get_upload_stats,
+            // Live viewer commands
+            commands::get_live_state,
+            commands::start_live,
+            commands::stop_live,
+            // Broadcast commands
+            commands::start_broadcast,
+            commands::stop_broadcast,
+            commands::get_broadcast_state,
+            commands::set_broadcast_title,
+            // Environment commands
+            commands::get_environments,
+            commands::set_broadcast_environment,
+            // Health check commands
+            commands::get_service_status,
+            commands::check_service_health,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

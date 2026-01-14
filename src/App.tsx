@@ -3,18 +3,21 @@ import { listen } from '@tauri-apps/api/event';
 import { Loader2 } from 'lucide-react';
 import { Setup } from './pages/Setup';
 import { Main } from './pages/Main';
+import { Live } from './pages/Live';
 import { Settings } from './pages/Settings';
 import { History } from './pages/History';
 import { AppLayout } from './components/AppLayout';
 import * as api from './lib/api';
+import type { User } from './lib/types';
 
-type Tab = 'home' | 'history' | 'settings';
+type Tab = 'home' | 'live' | 'history' | 'settings';
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [setupComplete, setSetupComplete] = useState(false);
   const [hasSession, setHasSession] = useState(false);
-  const [currentTab, setCurrentTab] = useState<Tab>('home');
+  const [currentTab, setCurrentTab] = useState<Tab>('live');
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     const checkState = async () => {
@@ -25,6 +28,18 @@ function App() {
         ]);
         setSetupComplete(config.setupComplete);
         setHasSession(session !== null);
+        if (session) {
+          // Set user from session first for quick display
+          setUser(session.user);
+          // Then refresh from API to get latest user data (username changes, etc.)
+          try {
+            const freshUser = await api.fetchMe();
+            setUser(freshUser);
+          } catch (err) {
+            console.error('Failed to refresh user data:', err);
+            // Keep using session user if refresh fails
+          }
+        }
       } catch (err) {
         console.error('Failed to load app state:', err);
       } finally {
@@ -60,6 +75,7 @@ function App() {
       await api.logout();
       setHasSession(false);
       setSetupComplete(false);
+      setUser(null);
     } catch (err) {
       console.error('Logout failed:', err);
     }
@@ -83,6 +99,8 @@ function App() {
   // Render with AppLayout
   const renderContent = () => {
     switch (currentTab) {
+      case 'live':
+        return <Live isActive={currentTab === 'live'} />;
       case 'settings':
         return <Settings />;
       case 'history':
@@ -97,6 +115,7 @@ function App() {
       currentTab={currentTab}
       onTabChange={setCurrentTab}
       onLogout={handleLogout}
+      user={user}
     >
       {renderContent()}
     </AppLayout>

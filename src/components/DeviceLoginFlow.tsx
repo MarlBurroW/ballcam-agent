@@ -249,17 +249,28 @@ export function DeviceLoginFlow({ onSuccess, onSwitchToPassword }: DeviceLoginFl
       <AuthCard>
         {renderContent()}
 
-        {onSwitchToPassword && state.status !== 'success' && (
-          <div className="pt-6 mt-6 border-t border-gray-700/50">
+        {state.status !== 'success' && (
+          <div className="pt-6 mt-6 border-t border-gray-700/50 space-y-2">
             <p className="text-xs text-center text-gray-500">
-              Have a password?{' '}
+              Don't have an account?{' '}
               <button
-                onClick={onSwitchToPassword}
+                onClick={() => open('https://ballcam.tv/register')}
                 className="text-violet-400 hover:text-violet-300 transition-colors"
               >
-                Sign in with email
+                Create one
               </button>
             </p>
+            {onSwitchToPassword && (
+              <p className="text-xs text-center text-gray-500">
+                Have a password?{' '}
+                <button
+                  onClick={onSwitchToPassword}
+                  className="text-violet-400 hover:text-violet-300 transition-colors"
+                >
+                  Sign in with email
+                </button>
+              </p>
+            )}
           </div>
         )}
       </AuthCard>

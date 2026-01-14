@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Loader2, Globe, Lock, FolderOpen, Bell, Power, Info, Download, Check, AlertCircle, RefreshCw } from 'lucide-react';
+import { Loader2, FolderOpen, Bell, Power, Info, Download, Check, AlertCircle, RefreshCw } from 'lucide-react';
 import { getVersion } from '@tauri-apps/api/app';
-import type { AppConfig, Visibility } from '@/lib/types';
+import type { AppConfig } from '@/lib/types';
 import * as api from '@/lib/api';
 import { useUpdater } from '@/hooks/useUpdater';
 
@@ -51,12 +51,6 @@ export function SettingsPanel() {
     }
   };
 
-  const handleVisibilityChange = (visibility: Visibility) => {
-    if (config) {
-      saveConfig({ ...config, defaultVisibility: visibility });
-    }
-  };
-
   const handleAutoStartChange = () => {
     if (config) {
       saveConfig({ ...config, autoStart: !config.autoStart });
@@ -87,43 +81,6 @@ export function SettingsPanel() {
 
   return (
     <div className="space-y-4">
-      {/* Visibility Setting */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-4">
-        <h3 className="text-sm font-medium text-gray-400 mb-3">Default Visibility</h3>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => handleVisibilityChange('public')}
-            disabled={saving}
-            className={`flex items-center gap-2 p-3 rounded-xl border transition-all ${
-              config.defaultVisibility === 'public'
-                ? 'bg-violet-500/20 border-violet-500/50 text-violet-300'
-                : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-600'
-            }`}
-          >
-            <Globe className="w-4 h-4" />
-            <div className="text-left">
-              <p className="text-sm font-medium">Public</p>
-              <p className="text-xs opacity-70">Anyone can view</p>
-            </div>
-          </button>
-          <button
-            onClick={() => handleVisibilityChange('unlisted')}
-            disabled={saving}
-            className={`flex items-center gap-2 p-3 rounded-xl border transition-all ${
-              config.defaultVisibility === 'unlisted'
-                ? 'bg-violet-500/20 border-violet-500/50 text-violet-300'
-                : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-600'
-            }`}
-          >
-            <Lock className="w-4 h-4" />
-            <div className="text-left">
-              <p className="text-sm font-medium">Unlisted</p>
-              <p className="text-xs opacity-70">Link only</p>
-            </div>
-          </button>
-        </div>
-      </div>
-
       {/* App Settings */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-2xl divide-y divide-gray-800">
         <button

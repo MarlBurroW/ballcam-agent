@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Eye, Upload, Clock, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Eye, Upload, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Globe, Link } from 'lucide-react';
 import { listen } from '@tauri-apps/api/event';
-import type { FolderInfo as FolderInfoType, UploadProgress as UploadProgressType, UploadRecord, UploadStats as UploadStatsType, User, WatcherState } from '@/lib/types';
-import { UserCard } from '@/components/StatusPage/UserCard';
+import type { AppConfig, FolderInfo as FolderInfoType, UploadProgress as UploadProgressType, UploadRecord, UploadStats as UploadStatsType, Visibility, WatcherState } from '@/lib/types';
 import { FolderInfo } from '@/components/StatusPage/FolderInfo';
 import { UploadStats } from '@/components/StatusPage/UploadStats';
 import * as api from '@/lib/api';
@@ -14,9 +13,10 @@ export function Main() {
   const [lastUpload, setLastUpload] = useState<UploadRecord | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgressType | null>(null);
-  const [user, setUser] = useState<User | null>(null);
   const [folderInfo, setFolderInfo] = useState<FolderInfoType | null>(null);
   const [uploadStats, setUploadStats] = useState<UploadStatsType | null>(null);
+  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [savingVisibility, setSavingVisibility] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshWatcherState = async () => {
@@ -25,17 +25,6 @@ export function Main() {
       setWatcherState(state);
     } catch (err) {
       console.error('Failed to load watcher state:', err);
-    }
-  };
-
-  const loadUserData = async () => {
-    try {
-      const session = await api.getSession();
-      if (session) {
-        setUser(session.user);
-      }
-    } catch (err) {
-      console.error('Failed to load user data:', err);
     }
   };
 
@@ -57,14 +46,37 @@ export function Main() {
     }
   };
 
+  const loadConfig = async () => {
+    try {
+      const cfg = await api.getConfig();
+      setConfig(cfg);
+    } catch (err) {
+      console.error('Failed to load config:', err);
+    }
+  };
+
+  const handleVisibilityChange = async (visibility: Visibility) => {
+    if (!config) return;
+    setSavingVisibility(true);
+    try {
+      const newConfig = { ...config, defaultVisibility: visibility };
+      await api.saveConfig(newConfig);
+      setConfig(newConfig);
+    } catch (err) {
+      console.error('Failed to save visibility:', err);
+    } finally {
+      setSavingVisibility(false);
+    }
+  };
+
   useEffect(() => {
     // Load initial data
     const loadAllData = async () => {
       await Promise.all([
         refreshWatcherState(),
-        loadUserData(),
         loadFolderInfo(),
         loadUploadStats(),
+        loadConfig(),
       ]);
       setIsLoading(false);
     };
@@ -169,14 +181,46 @@ export function Main() {
         </div>
       </div>
 
-      {/* User Card */}
-      <UserCard user={user} />
-
       {/* Upload Progress */}
       <UploadProgress progress={uploadProgress} isUploading={isUploading} />
 
       {/* Watcher Control */}
       <WatcherControl watcherState={watcherState} onStateChange={refreshWatcherState} />
+
+      {/* Visibility Setting */}
+      {config && (
+        <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-gray-400">Default Visibility</h3>
+            <div className="flex gap-1">
+              <button
+                onClick={() => handleVisibilityChange('public')}
+                disabled={savingVisibility}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
+                  config.defaultVisibility === 'public'
+                    ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                <Globe className="w-3 h-3" />
+                Public
+              </button>
+              <button
+                onClick={() => handleVisibilityChange('unlisted')}
+                disabled={savingVisibility}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
+                  config.defaultVisibility === 'unlisted'
+                    ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                <Link className="w-3 h-3" />
+                Unlisted
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Folder Info */}
       <FolderInfo folderInfo={folderInfo} />

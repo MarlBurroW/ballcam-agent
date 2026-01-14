@@ -20,13 +20,14 @@ impl std::fmt::Display for Visibility {
 
 /// Application configuration stored in config.json
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct AppConfig {
     pub replay_folder: String,
     pub default_visibility: Visibility,
     pub auto_start: bool,
     pub notifications_enabled: bool,
     pub setup_complete: bool,
+    pub stream_title: String,
 }
 
 impl Default for AppConfig {
@@ -37,6 +38,7 @@ impl Default for AppConfig {
             auto_start: false,
             notifications_enabled: true,
             setup_complete: false,
+            stream_title: String::new(),
         }
     }
 }
@@ -226,4 +228,234 @@ pub struct FolderInfo {
     pub platform: String,
     /// Whether folder currently exists
     pub exists: bool,
+}
+
+// ============================================================================
+// Live Viewer Types
+// ============================================================================
+
+/// 3D position or velocity vector
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Vector3 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+/// Rotation quaternion (normalized)
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Quaternion {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub w: f32,
+}
+
+/// Ball state at a point in time
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BallSnapshot {
+    pub position: Vector3,
+    pub velocity: Vector3,
+    pub rotation: Quaternion,
+    pub angular_velocity: Vector3,
+    /// Last team that touched the ball (0 = Blue, 1 = Orange, None = no touch yet)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_touch_team: Option<u8>,
+    /// Rigid body sleeping state (true = at rest, false = actively simulated)
+    pub sleeping: bool,
+}
+
+impl BallSnapshot {
+    /// Speed in km/h (2778 uu/s = 100 km/h)
+    pub fn speed_kmh(&self) -> f32 {
+        let speed_uus = (self.velocity.x.powi(2) + self.velocity.y.powi(2) + self.velocity.z.powi(2)).sqrt();
+        speed_uus * 100.0 / 2778.0
+    }
+}
+
+/// Car/player state at a point in time
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CarSnapshot {
+    pub name: String,
+    pub team: u8,
+    /// Is this the local player's car?
+    pub is_local: bool,
+    /// Unique player ID for matching (e.g., "Steam_76561198012345678")
+    pub unique_id: String,
+    pub position: Vector3,
+    pub velocity: Vector3,
+    pub rotation: Quaternion,
+    pub boost: u8,
+    pub is_boosting: bool,
+    pub is_on_ground: bool,
+    pub is_supersonic: bool,
+    /// Ball cam active (true = following ball, false = following car)
+    pub ball_cam: bool,
+    /// Car body ID (determines which car model to use, e.g., 23=Octane, 403=Fennec)
+    pub body_id: u32,
+    /// True when car is demolished (waiting to respawn)
+    pub is_demolished: bool,
+    /// Unique ID of the player who demolished this car (only set when is_demolished=true)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub demolished_by: Option<String>,
+    /// Rigid body sleeping state (true = at rest, false = actively simulated)
+    pub sleeping: bool,
+    /// Steering input (-1.0 to 1.0: -1 = full left, 0 = straight, 1 = full right)
+    pub steer: f32,
+}
+
+impl CarSnapshot {
+    /// Speed in km/h
+    pub fn speed_kmh(&self) -> f32 {
+        let speed_uus = (self.velocity.x.powi(2) + self.velocity.y.powi(2) + self.velocity.z.powi(2)).sqrt();
+        speed_uus * 100.0 / 2778.0
+    }
+}
+
+/// Boost pad state at a point in time
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BoostPadSnapshot {
+    /// Boost pad ID (0-33, consistent ordering by position)
+    pub id: u8,
+    /// Position in world coordinates
+    pub position: Vector3,
+    /// Is this a big boost pad (100%) or small (12%)?
+    pub is_big: bool,
+    /// Is the boost pad currently available to pick up?
+    pub is_available: bool,
+    /// Current respawn timer countdown in seconds (0.0 if available)
+    pub respawn_timer: f32,
+}
+
+/// Game info: time, scores, and match state
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameInfo {
+    /// Event type name (e.g., "Soccar", "Hockey", "Hoops", etc.)
+    pub event_type: String,
+    /// Time remaining in seconds (300.0 = 5:00)
+    pub time_remaining: f32,
+    /// Blue team score
+    pub score_blue: u32,
+    /// Orange team score
+    pub score_orange: u32,
+    /// Is the match in overtime?
+    pub is_overtime: bool,
+    /// Has the match ended?
+    pub is_match_ended: bool,
+    /// Unique ID of the last player who scored (e.g., "Steam_76561198012345678")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_scorer_id: Option<String>,
+    /// Playlist ID (e.g., 9=Training, 6=PrivateMatch, 13=RankedStandard)
+    pub playlist_id: i32,
+    /// Playlist name (e.g., "Training", "RankedStandard", "Doubles")
+    pub playlist_name: String,
+}
+
+/// Complete game state snapshot
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameSnapshot {
+    pub timestamp: u64,
+    pub ball: BallSnapshot,
+    pub cars: Vec<CarSnapshot>,
+    /// Boost pads state (34 pads total: 6 big + 28 small)
+    pub boost_pads: Vec<BoostPadSnapshot>,
+    /// Match info (time, scores, etc.) - optional for compatibility
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub game_info: Option<GameInfo>,
+}
+
+/// Match state sub-status when connected to Rocket League
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum MatchState {
+    /// Player is in a match, receiving game data
+    InMatch,
+    /// Player is in menus, no game data
+    InMenu,
+}
+
+/// Connection state enum for UI feedback
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum LiveConnectionState {
+    /// Not connected to Rocket League (game not running)
+    Disconnected,
+    /// Attempting to connect to Rocket League
+    Connecting,
+    /// Connected to Rocket League process
+    #[serde(rename_all = "camelCase")]
+    Connected { match_state: MatchState },
+    /// Connection error
+    Error { message: String },
+}
+
+// ============================================================================
+// Environment Types
+// ============================================================================
+
+/// Environment for live streaming (simplified from full environment data)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Environment {
+    pub id: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail_url: Option<String>,
+    pub is_default: bool,
+}
+
+/// Response from GET /api/environments
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvironmentsResponse {
+    pub environments: Vec<Environment>,
+    pub total: i64,
+}
+
+// ============================================================================
+// Live Streaming Types
+// ============================================================================
+
+/// Broadcast state for live streaming to ballcam.tv
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum BroadcastState {
+    /// Not currently broadcasting
+    #[default]
+    NotBroadcasting,
+    /// Connecting to server, starting session
+    Starting,
+    /// Actively broadcasting
+    #[serde(rename_all = "camelCase")]
+    Broadcasting {
+        session_id: String,
+        share_url: String,
+        channel_url: String,
+        username: String,
+        title: String,
+        visibility: Visibility,
+        started_at: u64,
+        /// Current number of viewers watching the stream
+        viewer_count: u32,
+    },
+    /// Stopping the broadcast
+    Stopping,
+    /// Error occurred
+    #[serde(rename_all = "camelCase")]
+    Error {
+        message: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        code: Option<String>,
+    },
 }

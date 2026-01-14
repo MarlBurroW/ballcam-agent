@@ -33,6 +33,9 @@ jobs:
           cache-on-failure: true
           save-if: true
 
+      - name: Configure git for private repos
+        run: git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
+
       - name: Install dependencies
         run: npm ci
 

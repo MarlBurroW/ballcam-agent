@@ -1,15 +1,16 @@
 use std::path::Path;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::config;
 use crate::types::{AuthSession, UploadProgress, UploadRecord, UploadStatus, Visibility};
+use crate::AppState;
 
 // Use localhost in dev mode, production URL otherwise
 #[cfg(dev)]
 const API_BASE_URL: &str = "http://localhost:3000/api";
 #[cfg(not(dev))]
-const API_BASE_URL: &str = "https://ballcam.tv/api";
+const API_BASE_URL: &str = "https://api.ballcam.tv/api";
 
 #[cfg(dev)]
 const FRONTEND_URL: &str = "http://localhost:5173";
@@ -158,6 +159,11 @@ impl Uploader {
 
         // Emit failure event
         let _ = app.emit("upload_failed", &record);
+
+        // Check service health on failure (might be service unavailable)
+        if let Some(state) = app.try_state::<AppState>() {
+            state.health_checker.on_api_error(app, &last_error).await;
+        }
 
         tracing::error!("Upload failed after {} attempts: {}", MAX_RETRIES, filename);
 
