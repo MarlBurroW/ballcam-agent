@@ -34,6 +34,7 @@ jobs:
           save-if: true
 
       - name: Configure git for private repos
+        shell: bash
         run: |
           git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
           mkdir -p ~/.cargo
