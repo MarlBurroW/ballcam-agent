@@ -357,6 +357,10 @@ pub struct GameInfo {
     pub playlist_id: i32,
     /// Playlist name (e.g., "Training", "RankedStandard", "Doubles")
     pub playlist_name: String,
+    /// Kickoff countdown (3, 2, 1, 0 = GO!)
+    pub countdown_time: i32,
+    /// Is the game currently paused?
+    pub is_paused: bool,
 }
 
 /// Complete game state snapshot

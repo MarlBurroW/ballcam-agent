@@ -232,6 +232,10 @@ export interface GameInfo {
   playlistId: number;
   /** Playlist name (e.g., "Training", "RankedStandard", "Doubles") */
   playlistName: string;
+  /** Kickoff countdown (3, 2, 1, 0 = GO!) */
+  countdownTime: number;
+  /** Is the game currently paused? */
+  isPaused: boolean;
 }
 
 // Complete game state snapshot

@@ -112,6 +112,8 @@ impl From<&RlGameInfo> for GameInfo {
             last_scorer_id: info.last_scorer_id.clone(),
             playlist_id: info.playlist.id,
             playlist_name: info.playlist.name.clone(),
+            countdown_time: info.countdown_time,
+            is_paused: info.is_paused,
         }
     }
 }

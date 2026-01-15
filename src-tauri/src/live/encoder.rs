@@ -17,7 +17,7 @@ const MAGIC_BYTE: u8 = 0x4C; // 'L' for Live
 /// - v5: Added sleeping state (ball: u8 after lastTouchTeam, car: bit5 in flags)
 /// - v6: Added steer (i8) to CarState for wheel steering animation
 /// - v7: Added full boost pads data (id, position, isBig, isAvailable, respawnTimer)
-/// - v8: Added playlistId (i16) and playlistName (string) to GameInfo
+/// - v8: Added playlistId (i16), playlistName (string), countdownTime (i8), and isPaused (u8) to GameInfo
 const PROTOCOL_VERSION: u8 = 8;
 
 /// Encode a Vector3 (position, velocity, etc.) as 3x f32 little-endian
@@ -89,9 +89,11 @@ fn encode_game_info(buf: &mut BytesMut, info: &GameInfo, cars: &[CarSnapshot]) {
         buf.put_u8(0); // hasLastScorer = false
     }
 
-    // v8: Playlist info
+    // v8: Playlist info, countdown, and pause state
     buf.put_i16_le(info.playlist_id as i16);
     encode_string(buf, &info.playlist_name);
+    buf.put_i8(info.countdown_time.clamp(-128, 127) as i8);
+    buf.put_u8(if info.is_paused { 1 } else { 0 });
 }
 
 /// Encode a complete game snapshot to binary format
@@ -197,9 +199,11 @@ pub fn encode_snapshot(snapshot: &GameSnapshot) -> BytesMut {
         buf.put_u8(0);       // scoreOrange
         buf.put_u8(0);       // game flags (isOvertime, isRoundActive)
         buf.put_u8(0);       // no last scorer
-        // v8: playlist info defaults
+        // v8: playlist info, countdown, and pause state defaults
         buf.put_i16_le(0);   // playlistId (unknown)
         buf.put_u8(0);       // playlistName (empty string)
+        buf.put_i8(0);       // countdownTime
+        buf.put_u8(0);       // isPaused
     }
 
     tracing::debug!(
