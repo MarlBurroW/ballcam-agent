@@ -232,16 +232,9 @@ impl BroadcastManager {
 
         tracing::info!("Connected to ballcam.tv");
 
-        // Small delay to ensure namespace connection is fully established
-        tokio::time::sleep(Duration::from_millis(200)).await;
-
-        // Test: emit a simple ping to verify events work
-        tracing::info!("Sending test-ping event...");
-        socket
-            .emit("test-ping", json!({"test": true}))
-            .await
-            .map_err(|e| format!("test-ping emit failed: {:?}", e))?;
-        tracing::info!("test-ping sent successfully");
+        // Wait for WebSocket connection to be fully established
+        // Production environments may have higher latency
+        tokio::time::sleep(Duration::from_millis(500)).await;
 
         // Emit broadcast-start and wait for response
         let visibility_str = visibility.to_string();
