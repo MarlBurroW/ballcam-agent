@@ -236,6 +236,14 @@ export interface GameInfo {
   countdownTime: number;
   /** Is the game currently paused? */
   isPaused: boolean;
+  /** Is the game currently showing a goal replay? */
+  isInReplay: boolean;
+  /** Time dilation factor (1.0 = normal, 0.5 = 50% slow-mo during replay) */
+  timeDilation: number;
+  /** Player ID currently focused during the goal replay */
+  replayFocusPlayerId?: string;
+  /** Is the end-of-match podium currently displayed? */
+  isOnPodium: boolean;
 }
 
 // Complete game state snapshot

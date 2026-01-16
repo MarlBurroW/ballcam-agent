@@ -114,6 +114,10 @@ impl From<&RlGameInfo> for GameInfo {
             playlist_name: info.playlist.name.clone(),
             countdown_time: info.countdown_time,
             is_paused: info.is_paused,
+            is_in_replay: info.is_in_replay,
+            time_dilation: info.time_dilation,
+            replay_focus_player_id: info.replay_focus_player_id.clone(),
+            is_on_podium: info.is_on_podium,
         }
     }
 }

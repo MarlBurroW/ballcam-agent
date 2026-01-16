@@ -18,7 +18,8 @@ const MAGIC_BYTE: u8 = 0x4C; // 'L' for Live
 /// - v6: Added steer (i8) to CarState for wheel steering animation
 /// - v7: Added full boost pads data (id, position, isBig, isAvailable, respawnTimer)
 /// - v8: Added playlistId (i16), playlistName (string), countdownTime (i8), and isPaused (u8) to GameInfo
-const PROTOCOL_VERSION: u8 = 8;
+/// - v9: Added isInReplay (u8), timeDilation (f32), replayFocusPlayerId (optional string), isOnPodium (u8) to GameInfo
+const PROTOCOL_VERSION: u8 = 9;
 
 /// Encode a Vector3 (position, velocity, etc.) as 3x f32 little-endian
 fn encode_vector3(buf: &mut BytesMut, v: &Vector3) {
@@ -94,6 +95,17 @@ fn encode_game_info(buf: &mut BytesMut, info: &GameInfo, cars: &[CarSnapshot]) {
     encode_string(buf, &info.playlist_name);
     buf.put_i8(info.countdown_time.clamp(-128, 127) as i8);
     buf.put_u8(if info.is_paused { 1 } else { 0 });
+
+    // v9: Replay detection, time dilation, focus player, and podium state
+    buf.put_u8(if info.is_in_replay { 1 } else { 0 });
+    buf.put_f32_le(info.time_dilation);
+    if let Some(ref player_id) = info.replay_focus_player_id {
+        buf.put_u8(1); // hasReplayFocusPlayer = true
+        encode_string(buf, player_id);
+    } else {
+        buf.put_u8(0); // hasReplayFocusPlayer = false
+    }
+    buf.put_u8(if info.is_on_podium { 1 } else { 0 });
 }
 
 /// Encode a complete game snapshot to binary format

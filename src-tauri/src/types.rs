@@ -361,6 +361,15 @@ pub struct GameInfo {
     pub countdown_time: i32,
     /// Is the game currently paused?
     pub is_paused: bool,
+    /// Is the game currently showing a goal replay?
+    pub is_in_replay: bool,
+    /// Time dilation factor (1.0 = normal, 0.5 = 50% slow-mo during replay)
+    pub time_dilation: f32,
+    /// Player ID currently focused during the goal replay
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replay_focus_player_id: Option<String>,
+    /// Is the end-of-match podium currently displayed?
+    pub is_on_podium: bool,
 }
 
 /// Complete game state snapshot
