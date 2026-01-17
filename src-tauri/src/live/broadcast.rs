@@ -76,6 +76,8 @@ pub struct BroadcastManager {
     last_game_info_emit: Mutex<Instant>,
     /// Pending viewer count received before state is Broadcasting
     pending_viewer_count: Arc<Mutex<u32>>,
+    /// Auth error received during connection (set by error handler)
+    auth_error: Arc<Mutex<Option<String>>>,
 }
 
 impl BroadcastManager {
@@ -91,6 +93,7 @@ impl BroadcastManager {
             last_game_info: Mutex::new(None),
             last_game_info_emit: Mutex::new(Instant::now()),
             pending_viewer_count: Arc::new(Mutex::new(0)),
+            auth_error: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -154,17 +157,19 @@ impl BroadcastManager {
     ) -> Result<(String, String, String, String, String), String> {
         tracing::info!("Starting broadcast with visibility: {}, environment: {:?}", visibility, environment_id);
 
-        // Reset pending viewer count for new broadcast
+        // Reset pending viewer count and auth error for new broadcast
         *self.pending_viewer_count.lock().await = 0;
+        *self.auth_error.lock().await = None;
 
         // Build Socket.IO connection with auth
         let socket_url = get_socket_url();
         tracing::info!("Connecting to Socket.IO at: {} namespace: {}", socket_url, LIVE_NAMESPACE);
 
-        // Clone Arcs for the viewer-count listener
+        // Clone Arcs for listeners
         let state_for_viewer = self.state.clone();
         let app_for_viewer = self.app_handle.clone();
         let pending_count_for_viewer = self.pending_viewer_count.clone();
+        let auth_error_for_handler = self.auth_error.clone();
 
         let socket = ClientBuilder::new(&socket_url)
             .namespace(LIVE_NAMESPACE)
@@ -180,9 +185,24 @@ impl BroadcastManager {
                     tracing::info!("Socket.IO 'connect' event received");
                 })
             })
-            .on("error", |payload, _| {
+            .on("error", move |payload, _| {
+                let auth_error = auth_error_for_handler.clone();
                 Box::pin(async move {
                     tracing::error!("Socket.IO 'error' event: {:?}", payload);
+
+                    // Check if this is an auth error (ConnectError with token message)
+                    if let Payload::Text(values) = &payload {
+                        if let Some(first) = values.first() {
+                            let text = first.as_str().unwrap_or("");
+                            if text.contains("Invalid or expired token") {
+                                tracing::warn!("Authentication failed: token invalid or expired");
+                                *auth_error.lock().await = Some("Token invalide ou expiré. Veuillez vous reconnecter.".to_string());
+                            } else if text.contains("ConnectError") {
+                                tracing::warn!("Connection error: {}", text);
+                                *auth_error.lock().await = Some(format!("Erreur de connexion: {}", text));
+                            }
+                        }
+                    }
                 })
             })
             .on("viewer-count", move |payload, _| {
@@ -235,6 +255,13 @@ impl BroadcastManager {
         // Wait for WebSocket connection to be fully established
         // Production environments may have higher latency
         tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Check if an auth error occurred during connection handshake
+        if let Some(error_msg) = self.auth_error.lock().await.take() {
+            // Disconnect the socket since auth failed
+            let _ = socket.disconnect().await;
+            return Err(error_msg);
+        }
 
         // Emit broadcast-start and wait for response
         let visibility_str = visibility.to_string();
