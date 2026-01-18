@@ -20,7 +20,8 @@ const MAGIC_BYTE: u8 = 0x4C; // 'L' for Live
 /// - v8: Added playlistId (i16), playlistName (string), countdownTime (i8), and isPaused (u8) to GameInfo
 /// - v9: Added isInReplay (u8), timeDilation (f32), replayFocusPlayerId (optional string), isOnPodium (u8) to GameInfo
 /// - v10: Added isHidden (u8) to BallState after sleeping
-const PROTOCOL_VERSION: u8 = 10;
+/// - v11: Added playerId (i32) and isBot (u8) to CarState; changed lastScorerId, demolishedBy, replayFocusPlayerId to i32; added isHidden (bit6) to car flags
+const PROTOCOL_VERSION: u8 = 11;
 
 /// Encode a Vector3 (position, velocity, etc.) as 3x f32 little-endian
 fn encode_vector3(buf: &mut BytesMut, v: &Vector3) {
@@ -45,21 +46,8 @@ fn encode_string(buf: &mut BytesMut, s: &str) {
     buf.put_slice(&bytes[..len as usize]);
 }
 
-/// Parse a unique_id (e.g., "Steam_76561198012345678") into (platform, platformId)
-fn parse_unique_id(unique_id: &str) -> (&str, &str) {
-    if let Some(idx) = unique_id.find('_') {
-        let (platform, rest) = unique_id.split_at(idx);
-        // Skip the underscore
-        let platform_id = &rest[1..];
-        (platform, platform_id)
-    } else {
-        // Fallback: unknown platform, use whole string as ID
-        ("unknown", unique_id)
-    }
-}
-
 /// Encode game info (time, scores, flags, last scorer)
-fn encode_game_info(buf: &mut BytesMut, info: &GameInfo, cars: &[CarSnapshot]) {
+fn encode_game_info(buf: &mut BytesMut, info: &GameInfo, _cars: &[CarSnapshot]) {
     buf.put_f32_le(info.time_remaining);
     buf.put_u8(info.score_blue.min(255) as u8);
     buf.put_u8(info.score_orange.min(255) as u8);
@@ -69,22 +57,10 @@ fn encode_game_info(buf: &mut BytesMut, info: &GameInfo, cars: &[CarSnapshot]) {
         | (if !info.is_match_ended { 2 } else { 0 });
     buf.put_u8(flags);
 
-    // Last scorer info (now uses player_id to find scorer)
+    // v11: Last scorer as player_id (i32) directly - works for bots too
     if let Some(scorer_player_id) = info.last_scorer_id {
-        // Find scorer in cars list by player_id
-        if let Some(scorer) = cars.iter().find(|c| c.player_id == scorer_player_id) {
-            let (platform, platform_id) = parse_unique_id(&scorer.unique_id);
-            buf.put_u8(1); // hasLastScorer = true
-            encode_string(buf, platform_id);
-            encode_string(buf, platform);
-            encode_string(buf, &scorer.name);
-        } else {
-            // Scorer not found in current snapshot (may have left or is a bot with no unique_id)
-            buf.put_u8(1); // hasLastScorer = true
-            encode_string(buf, ""); // platformId unknown
-            encode_string(buf, "Unknown"); // platform unknown
-            encode_string(buf, ""); // name unknown
-        }
+        buf.put_u8(1); // hasLastScorer = true
+        buf.put_i32_le(scorer_player_id);
     } else {
         buf.put_u8(0); // hasLastScorer = false
     }
@@ -95,19 +71,12 @@ fn encode_game_info(buf: &mut BytesMut, info: &GameInfo, cars: &[CarSnapshot]) {
     buf.put_i8(info.countdown_time.clamp(-128, 127) as i8);
     buf.put_u8(if info.is_paused { 1 } else { 0 });
 
-    // v9: Replay detection, time dilation, focus player, and podium state
+    // v9/v11: Replay detection, time dilation, focus player (now i32), and podium state
     buf.put_u8(if info.is_in_replay { 1 } else { 0 });
     buf.put_f32_le(info.time_dilation);
     if let Some(focus_player_id) = info.replay_focus_player_id {
-        // Find player by player_id to get their unique_id for the protocol
-        if let Some(player) = cars.iter().find(|c| c.player_id == focus_player_id) {
-            buf.put_u8(1); // hasReplayFocusPlayer = true
-            encode_string(buf, &player.unique_id);
-        } else {
-            // Player not found, send empty string
-            buf.put_u8(1);
-            encode_string(buf, "");
-        }
+        buf.put_u8(1); // hasReplayFocusPlayer = true
+        buf.put_i32_le(focus_player_id); // v11: i32 instead of string
     } else {
         buf.put_u8(0); // hasReplayFocusPlayer = false
     }
@@ -140,26 +109,33 @@ pub fn encode_snapshot(snapshot: &GameSnapshot) -> BytesMut {
     // Cars array
     buf.put_u8(snapshot.cars.len() as u8);
     for car in &snapshot.cars {
-        // Parse unique_id to extract platform and platformId
-        let (platform, platform_id) = parse_unique_id(&car.unique_id);
-
         encode_string(&mut buf, &car.name);
         buf.put_u8(car.team);
         buf.put_u8(if car.is_local { 1 } else { 0 });
-        encode_string(&mut buf, platform_id);
-        encode_string(&mut buf, platform);
+
+        // v11: player_id (i32) for cross-referencing (works for bots too)
+        buf.put_i32_le(car.player_id);
+
+        // v11: isBot flag
+        buf.put_u8(if car.is_bot { 1 } else { 0 });
+
+        // Platform and unique_id as separate strings (for display and DB linking)
+        encode_string(&mut buf, &car.platform);
+        encode_string(&mut buf, &car.unique_id);
+
         encode_vector3(&mut buf, &car.position);
         encode_vector3(&mut buf, &car.velocity);
         encode_quaternion(&mut buf, &car.rotation);
         buf.put_u8(car.boost);
 
-        // Car flags bitfield: bit0=isBoosting, bit1=isOnGround, bit2=isSupersonic, bit3=isDemolished, bit4=isBallCam, bit5=isSleeping
+        // Car flags bitfield: bit0=isBoosting, bit1=isOnGround, bit2=isSupersonic, bit3=isDemolished, bit4=isBallCam, bit5=isSleeping, bit6=isHidden
         let flags = (if car.is_boosting { 1u8 } else { 0 })
             | (if car.is_on_ground { 2 } else { 0 })
             | (if car.is_supersonic { 4 } else { 0 })
             | (if car.is_demolished { 8 } else { 0 })
             | (if car.ball_cam { 16 } else { 0 })
-            | (if car.sleeping { 32 } else { 0 });
+            | (if car.sleeping { 32 } else { 0 })
+            | (if car.is_hidden { 64 } else { 0 }); // v11
         buf.put_u8(flags);
 
         // Car body ID (u16 is enough for all body IDs)
@@ -169,23 +145,11 @@ pub fn encode_snapshot(snapshot: &GameSnapshot) -> BytesMut {
         let steer_i8 = (car.steer.clamp(-1.0, 1.0) * 127.0) as i8;
         buf.put_i8(steer_i8);
 
-        // v2: If demolished, encode attacker info (now uses player_id)
+        // v11: If demolished, encode attacker as player_id (i32) directly
         if car.is_demolished {
             if let Some(attacker_player_id) = car.demolished_by {
-                // Find attacker in cars list by player_id
-                if let Some(attacker) = snapshot.cars.iter().find(|c| c.player_id == attacker_player_id) {
-                    let (attacker_platform, attacker_platform_id) = parse_unique_id(&attacker.unique_id);
-                    buf.put_u8(1); // hasDemolishedBy = true
-                    encode_string(&mut buf, attacker_platform_id);
-                    encode_string(&mut buf, attacker_platform);
-                    encode_string(&mut buf, &attacker.name);
-                } else {
-                    // Attacker not found in current snapshot (may have left or is a bot)
-                    buf.put_u8(1); // hasDemolishedBy = true
-                    encode_string(&mut buf, ""); // platformId unknown
-                    encode_string(&mut buf, "Unknown"); // platform unknown
-                    encode_string(&mut buf, ""); // name unknown
-                }
+                buf.put_u8(1); // hasDemolishedBy = true
+                buf.put_i32_le(attacker_player_id);
             } else {
                 buf.put_u8(0); // hasDemolishedBy = false
             }
@@ -221,6 +185,11 @@ pub fn encode_snapshot(snapshot: &GameSnapshot) -> BytesMut {
         buf.put_u8(0);       // playlistName (empty string)
         buf.put_i8(0);       // countdownTime
         buf.put_u8(0);       // isPaused
+        // v9: replay state defaults
+        buf.put_u8(0);       // isInReplay
+        buf.put_f32_le(1.0); // timeDilation (normal speed)
+        buf.put_u8(0);       // no replayFocusPlayer
+        buf.put_u8(0);       // isOnPodium
     }
 
     tracing::debug!(
@@ -271,7 +240,7 @@ mod tests {
         let buf = encode_snapshot(&snapshot);
 
         // Minimum size: header (2) + timestamp (8) + ball (55) + cars count (1) +
-        // boost pads count (1) + game info (8)
-        assert!(buf.len() >= 75);
+        // boost pads count (1) + game info (15 with v9 replay fields)
+        assert!(buf.len() >= 82);
     }
 }
