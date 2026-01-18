@@ -40,6 +40,7 @@ impl From<&BallState> for BallSnapshot {
             },
             last_touch_team: ball.last_touch_team,
             sleeping: ball.sleeping,
+            is_hidden: ball.is_hidden,
         }
     }
 }
@@ -51,7 +52,10 @@ impl From<&CarState> for CarSnapshot {
             name: car.name.clone(),
             team: car.team,
             is_local: car.is_local,
+            player_id: car.player_id,
+            platform: car.platform.clone(),
             unique_id: car.unique_id.clone(),
+            is_bot: car.is_bot,
             position: Vector3 {
                 x: car.position.x,
                 y: car.position.y,
@@ -75,7 +79,8 @@ impl From<&CarState> for CarSnapshot {
             ball_cam: car.ball_cam,
             body_id: car.body_id.max(0) as u32,
             is_demolished: car.is_demolished,
-            demolished_by: car.demolished_by.clone(),
+            demolished_by: car.demolished_by,
+            is_hidden: car.is_hidden,
             sleeping: car.sleeping,
             steer: car.steer,
         }
@@ -109,14 +114,14 @@ impl From<&RlGameInfo> for GameInfo {
             score_orange: info.score_orange,
             is_overtime: info.is_overtime,
             is_match_ended: info.is_match_ended,
-            last_scorer_id: info.last_scorer_id.clone(),
+            last_scorer_id: info.last_scorer_id,
             playlist_id: info.playlist.id,
             playlist_name: info.playlist.name.clone(),
             countdown_time: info.countdown_time,
             is_paused: info.is_paused,
             is_in_replay: info.is_in_replay,
             time_dilation: info.time_dilation,
-            replay_focus_player_id: info.replay_focus_player_id.clone(),
+            replay_focus_player_id: info.replay_focus_player_id,
             is_on_podium: info.is_on_podium,
         }
     }

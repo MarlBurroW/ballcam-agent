@@ -1,12 +1,12 @@
 import { ReactNode, useState, useEffect } from 'react';
-import { FolderSearch, History, Settings, LogOut, Radio } from 'lucide-react';
+import { FolderSearch, History, Settings, LogOut, Radio, Bug } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/ui/Logo';
 import { ServiceStatusBar } from '@/components/ServiceStatusBar';
 import type { User, BroadcastState } from '@/lib/types';
 import * as api from '@/lib/api';
 
-type Tab = 'home' | 'live' | 'history' | 'settings';
+type Tab = 'home' | 'live' | 'history' | 'settings' | 'debug';
 
 function getInitials(username: string): string {
   return username
@@ -149,6 +149,15 @@ export function AppLayout({ children, currentTab, onTabChange, onLogout, user }:
               active={currentTab === 'settings'}
               onClick={() => onTabChange('settings')}
             />
+            {/* Debug tab - DEV mode only */}
+            {import.meta.env.DEV && (
+              <NavItem
+                icon={<Bug className="w-5 h-5" />}
+                label="Debug"
+                active={currentTab === 'debug'}
+                onClick={() => onTabChange('debug')}
+              />
+            )}
           </div>
         </nav>
 

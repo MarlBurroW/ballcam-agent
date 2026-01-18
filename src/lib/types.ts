@@ -189,6 +189,8 @@ export interface BallSnapshot {
   lastTouchTeam?: number;
   /** Rigid body sleeping state (true = at rest, false = actively simulated) */
   sleeping: boolean;
+  /** Actor is hidden (bHidden flag) */
+  isHidden: boolean;
 }
 
 // Car/player state at a point in time
@@ -197,6 +199,14 @@ export interface CarSnapshot {
   team: number; // 0=Blue, 1=Orange
   /** Is this the local player's car? */
   isLocal: boolean;
+  /** Session-unique player ID (works for bots too, -1 if unknown) */
+  playerId: number;
+  /** Platform name (Steam, Epic, PlayStation, Xbox, Switch, etc.) */
+  platform: string;
+  /** Unique platform ID (e.g., "76561198012345678") - empty for bots */
+  uniqueId: string;
+  /** True if this player is a bot */
+  isBot: boolean;
   position: Vector3;
   velocity: Vector3;
   rotation: Quaternion;
@@ -208,8 +218,16 @@ export interface CarSnapshot {
   ballCam: boolean;
   /** Car body ID (determines which car model to use, e.g., 23=Octane, 403=Fennec) */
   bodyId: number;
+  /** True when car is demolished (waiting to respawn) */
+  isDemolished: boolean;
+  /** Player ID of the player who demolished this car (only set when isDemolished=true) */
+  demolishedBy?: number;
+  /** Actor is hidden (bHidden flag) - true during demolition until respawn */
+  isHidden: boolean;
   /** Rigid body sleeping state (true = at rest, false = actively simulated) */
   sleeping: boolean;
+  /** Steering input (-1.0 to 1.0: -1 = full left, 0 = straight, 1 = full right) */
+  steer: number;
 }
 
 // Game info: time, scores, and match state
@@ -226,8 +244,8 @@ export interface GameInfo {
   isOvertime: boolean;
   /** Has the match ended? */
   isMatchEnded: boolean;
-  /** Unique ID of the last player who scored (e.g., "Steam_76561198012345678") */
-  lastScorerId?: string;
+  /** Player ID of the last player who scored (session-unique, works for bots) */
+  lastScorerId?: number;
   /** Playlist ID (e.g., 9=Training, 6=PrivateMatch, 13=RankedStandard) */
   playlistId: number;
   /** Playlist name (e.g., "Training", "RankedStandard", "Doubles") */
@@ -240,8 +258,8 @@ export interface GameInfo {
   isInReplay: boolean;
   /** Time dilation factor (1.0 = normal, 0.5 = 50% slow-mo during replay) */
   timeDilation: number;
-  /** Player ID currently focused during the goal replay */
-  replayFocusPlayerId?: string;
+  /** Player ID currently focused during the goal replay (session-unique, works for bots) */
+  replayFocusPlayerId?: number;
   /** Is the end-of-match podium currently displayed? */
   isOnPodium: boolean;
 }

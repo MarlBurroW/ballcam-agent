@@ -7,11 +7,12 @@ import { Main } from './pages/Main';
 import { Live } from './pages/Live';
 import { Settings } from './pages/Settings';
 import { History } from './pages/History';
+import { Debug } from './pages/Debug';
 import { AppLayout } from './components/AppLayout';
 import * as api from './lib/api';
 import type { User } from './lib/types';
 
-type Tab = 'home' | 'live' | 'history' | 'settings';
+type Tab = 'home' | 'live' | 'history' | 'settings' | 'debug';
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -115,6 +116,8 @@ function App() {
         return <Settings />;
       case 'history':
         return <History />;
+      case 'debug':
+        return <Debug />;
       default:
         return <Main />;
     }

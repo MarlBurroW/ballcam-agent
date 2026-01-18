@@ -3752,7 +3752,7 @@ dependencies = [
 [[package]]
 name = "rl-memory"
 version = "0.1.0"
-source = "git+https://github.com/MarlBurroW/rl-memory?branch=main#d06ae18da42baa2f51a656f0fb58534129d732a7"
+source = "git+https://github.com/MarlBurroW/rl-memory?branch=main#d3be38f050cdf3e819dd16524309c5a0b0da427c"
 dependencies = [
  "serde",
  "serde_json",

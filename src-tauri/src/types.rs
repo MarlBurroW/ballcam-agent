@@ -268,6 +268,8 @@ pub struct BallSnapshot {
     pub last_touch_team: Option<u8>,
     /// Rigid body sleeping state (true = at rest, false = actively simulated)
     pub sleeping: bool,
+    /// Actor is hidden (bHidden flag)
+    pub is_hidden: bool,
 }
 
 impl BallSnapshot {
@@ -286,8 +288,14 @@ pub struct CarSnapshot {
     pub team: u8,
     /// Is this the local player's car?
     pub is_local: bool,
-    /// Unique player ID for matching (e.g., "Steam_76561198012345678")
+    /// Session-unique player ID for matching (works for bots too, -1 if unknown)
+    pub player_id: i32,
+    /// Platform name (Steam, Epic, PlayStation, Xbox, Switch, etc.)
+    pub platform: String,
+    /// Unique platform ID (Steam ID, Epic Account ID, etc.) - empty for bots
     pub unique_id: String,
+    /// True if this player is a bot
+    pub is_bot: bool,
     pub position: Vector3,
     pub velocity: Vector3,
     pub rotation: Quaternion,
@@ -301,9 +309,11 @@ pub struct CarSnapshot {
     pub body_id: u32,
     /// True when car is demolished (waiting to respawn)
     pub is_demolished: bool,
-    /// Unique ID of the player who demolished this car (only set when is_demolished=true)
+    /// Player ID of the player who demolished this car (only set when is_demolished=true)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub demolished_by: Option<String>,
+    pub demolished_by: Option<i32>,
+    /// Actor is hidden (bHidden flag) - true during demolition until respawn
+    pub is_hidden: bool,
     /// Rigid body sleeping state (true = at rest, false = actively simulated)
     pub sleeping: bool,
     /// Steering input (-1.0 to 1.0: -1 = full left, 0 = straight, 1 = full right)
@@ -350,9 +360,9 @@ pub struct GameInfo {
     pub is_overtime: bool,
     /// Has the match ended?
     pub is_match_ended: bool,
-    /// Unique ID of the last player who scored (e.g., "Steam_76561198012345678")
+    /// Player ID of the last player who scored (session-unique, works for bots)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_scorer_id: Option<String>,
+    pub last_scorer_id: Option<i32>,
     /// Playlist ID (e.g., 9=Training, 6=PrivateMatch, 13=RankedStandard)
     pub playlist_id: i32,
     /// Playlist name (e.g., "Training", "RankedStandard", "Doubles")
@@ -365,9 +375,9 @@ pub struct GameInfo {
     pub is_in_replay: bool,
     /// Time dilation factor (1.0 = normal, 0.5 = 50% slow-mo during replay)
     pub time_dilation: f32,
-    /// Player ID currently focused during the goal replay
+    /// Player ID currently focused during the goal replay (session-unique, works for bots)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub replay_focus_player_id: Option<String>,
+    pub replay_focus_player_id: Option<i32>,
     /// Is the end-of-match podium currently displayed?
     pub is_on_podium: bool,
 }

@@ -19,7 +19,8 @@ const MAGIC_BYTE: u8 = 0x4C; // 'L' for Live
 /// - v7: Added full boost pads data (id, position, isBig, isAvailable, respawnTimer)
 /// - v8: Added playlistId (i16), playlistName (string), countdownTime (i8), and isPaused (u8) to GameInfo
 /// - v9: Added isInReplay (u8), timeDilation (f32), replayFocusPlayerId (optional string), isOnPodium (u8) to GameInfo
-const PROTOCOL_VERSION: u8 = 9;
+/// - v10: Added isHidden (u8) to BallState after sleeping
+const PROTOCOL_VERSION: u8 = 10;
 
 /// Encode a Vector3 (position, velocity, etc.) as 3x f32 little-endian
 fn encode_vector3(buf: &mut BytesMut, v: &Vector3) {
@@ -68,22 +69,20 @@ fn encode_game_info(buf: &mut BytesMut, info: &GameInfo, cars: &[CarSnapshot]) {
         | (if !info.is_match_ended { 2 } else { 0 });
     buf.put_u8(flags);
 
-    // Last scorer info
-    if let Some(ref scorer_id) = info.last_scorer_id {
-        // Find scorer in cars list
-        if let Some(scorer) = cars.iter().find(|c| &c.unique_id == scorer_id) {
+    // Last scorer info (now uses player_id to find scorer)
+    if let Some(scorer_player_id) = info.last_scorer_id {
+        // Find scorer in cars list by player_id
+        if let Some(scorer) = cars.iter().find(|c| c.player_id == scorer_player_id) {
             let (platform, platform_id) = parse_unique_id(&scorer.unique_id);
             buf.put_u8(1); // hasLastScorer = true
             encode_string(buf, platform_id);
             encode_string(buf, platform);
             encode_string(buf, &scorer.name);
         } else {
-            // Scorer not found in current snapshot (may have left)
-            // Encode partial info from unique_id
-            let (platform, platform_id) = parse_unique_id(scorer_id);
+            // Scorer not found in current snapshot (may have left or is a bot with no unique_id)
             buf.put_u8(1); // hasLastScorer = true
-            encode_string(buf, platform_id);
-            encode_string(buf, platform);
+            encode_string(buf, ""); // platformId unknown
+            encode_string(buf, "Unknown"); // platform unknown
             encode_string(buf, ""); // name unknown
         }
     } else {
@@ -99,9 +98,16 @@ fn encode_game_info(buf: &mut BytesMut, info: &GameInfo, cars: &[CarSnapshot]) {
     // v9: Replay detection, time dilation, focus player, and podium state
     buf.put_u8(if info.is_in_replay { 1 } else { 0 });
     buf.put_f32_le(info.time_dilation);
-    if let Some(ref player_id) = info.replay_focus_player_id {
-        buf.put_u8(1); // hasReplayFocusPlayer = true
-        encode_string(buf, player_id);
+    if let Some(focus_player_id) = info.replay_focus_player_id {
+        // Find player by player_id to get their unique_id for the protocol
+        if let Some(player) = cars.iter().find(|c| c.player_id == focus_player_id) {
+            buf.put_u8(1); // hasReplayFocusPlayer = true
+            encode_string(buf, &player.unique_id);
+        } else {
+            // Player not found, send empty string
+            buf.put_u8(1);
+            encode_string(buf, "");
+        }
     } else {
         buf.put_u8(0); // hasReplayFocusPlayer = false
     }
@@ -122,13 +128,14 @@ pub fn encode_snapshot(snapshot: &GameSnapshot) -> BytesMut {
     // Timestamp (8 bytes) - f64 little-endian
     buf.put_f64_le(snapshot.timestamp as f64);
 
-    // Ball state (54 bytes)
+    // Ball state (55 bytes)
     encode_vector3(&mut buf, &snapshot.ball.position);
     encode_vector3(&mut buf, &snapshot.ball.velocity);
     encode_quaternion(&mut buf, &snapshot.ball.rotation);
     encode_vector3(&mut buf, &snapshot.ball.angular_velocity);
     buf.put_u8(snapshot.ball.last_touch_team.unwrap_or(255));
     buf.put_u8(if snapshot.ball.sleeping { 1 } else { 0 });
+    buf.put_u8(if snapshot.ball.is_hidden { 1 } else { 0 }); // v10
 
     // Cars array
     buf.put_u8(snapshot.cars.len() as u8);
@@ -162,23 +169,21 @@ pub fn encode_snapshot(snapshot: &GameSnapshot) -> BytesMut {
         let steer_i8 = (car.steer.clamp(-1.0, 1.0) * 127.0) as i8;
         buf.put_i8(steer_i8);
 
-        // v2: If demolished, encode attacker info
+        // v2: If demolished, encode attacker info (now uses player_id)
         if car.is_demolished {
-            if let Some(attacker_id) = &car.demolished_by {
-                // Find attacker in cars list
-                if let Some(attacker) = snapshot.cars.iter().find(|c| &c.unique_id == attacker_id) {
+            if let Some(attacker_player_id) = car.demolished_by {
+                // Find attacker in cars list by player_id
+                if let Some(attacker) = snapshot.cars.iter().find(|c| c.player_id == attacker_player_id) {
                     let (attacker_platform, attacker_platform_id) = parse_unique_id(&attacker.unique_id);
                     buf.put_u8(1); // hasDemolishedBy = true
                     encode_string(&mut buf, attacker_platform_id);
                     encode_string(&mut buf, attacker_platform);
                     encode_string(&mut buf, &attacker.name);
                 } else {
-                    // Attacker not found in current snapshot (may have left)
-                    // Encode partial info from unique_id
-                    let (attacker_platform, attacker_platform_id) = parse_unique_id(attacker_id);
+                    // Attacker not found in current snapshot (may have left or is a bot)
                     buf.put_u8(1); // hasDemolishedBy = true
-                    encode_string(&mut buf, attacker_platform_id);
-                    encode_string(&mut buf, attacker_platform);
+                    encode_string(&mut buf, ""); // platformId unknown
+                    encode_string(&mut buf, "Unknown"); // platform unknown
                     encode_string(&mut buf, ""); // name unknown
                 }
             } else {
@@ -243,6 +248,7 @@ mod tests {
                 angular_velocity: Vector3 { x: 0.0, y: 0.0, z: 0.0 },
                 last_touch_team: None,
                 sleeping: false,
+                is_hidden: false,
             },
             cars: vec![],
             boost_pads: vec![],
@@ -264,8 +270,8 @@ mod tests {
         let snapshot = create_test_snapshot();
         let buf = encode_snapshot(&snapshot);
 
-        // Minimum size: header (2) + timestamp (8) + ball (53) + cars count (1) +
+        // Minimum size: header (2) + timestamp (8) + ball (55) + cars count (1) +
         // boost pads count (1) + game info (8)
-        assert!(buf.len() >= 73);
+        assert!(buf.len() >= 75);
     }
 }
